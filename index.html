@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Виртуальный Музей</title>
+  
+  <!-- A-Frame и Look-At компонент -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
+  
+  <!-- Стили -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- UI Поверх 3D (Название комнаты) -->
+  <div id="ui-header">
+    <h1 id="room-title">Загрузка...</h1>
+    <p>Виртуальный Музей</p>
+  </div>
+
+  <!-- Экран затемнения для плавных переходов -->
+  <div id="fade-overlay"></div>
+
+  <!-- Всплывающее окно экспоната -->
+  <div id="exhibit-modal" style="display: none;">
+    <div class="modal-content">
+      <button class="close-btn" id="modal-close-btn">✕</button>
+      <img id="modal-image" src="" alt="Экспонат" style="display: none;">
+      <div class="modal-text">
+        <h2 id="modal-title">Название</h2>
+        <div id="modal-desc">Описание</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3D Сцена -->
+  <a-scene 
+    embedded 
+    cursor="rayOrigin: mouse" 
+    raycaster="objects: .clickable" 
+    loading-screen="enabled: false"
+    vr-mode-ui="enabled: true"
+  >
+    <!-- Освещение -->
+    <a-light type="ambient" color="#FFFFFF" intensity="1.5"></a-light>
+    
+    <!-- Панорама -->
+    <a-sky id="sky-pano" src="" rotation="0 -90 0" material="shader: flat; color: #FFF;"></a-sky>
+
+    <!-- Контейнеры для точек -->
+    <a-entity id="links-container"></a-entity>
+    <a-entity id="exhibits-container"></a-entity>
+
+    <!-- Камера -->
+    <a-camera id="main-camera" look-controls="magicWindowTrackingEnabled: false; touchEnabled: true; reverseMouseDrag: true; reverseTouchDrag: true" wasd-controls="enabled: false"></a-camera>
+  </a-scene>
+
+  <!-- Кнопка и панель для показа координат -->
+  <button id="coord-toggle-btn">📍</button>
+  <div id="coord-panel" style="display: none;">
+    <p>Наведите центр экрана на нужное место. Вот координаты (x y z):</p>
+    <div id="coord-value">0.00 0.00 -3.00</div>
+    <p class="coord-hint">Скопируйте их и вставьте в config.js</p>
+  </div>
+
+  <!-- Настройки и Скрипты -->
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
