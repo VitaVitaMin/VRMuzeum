@@ -7,7 +7,7 @@ const CONFIG = {
     "room1": {
       name: "Главный зал",
       // Панорамы кладите в папку assets/ и указывайте путь к ним
-      panorama: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e6/Equirectangular_projection_SW.jpg/1280px-Equirectangular_projection_SW.jpg",
+      panorama: "assets/123.jpg",
       
       // Маленькие белые точки (экспонаты)
       exhibits: [
@@ -16,7 +16,7 @@ const CONFIG = {
           title: "Первый экспонат",
           description: "Описание вашего экспоната. Можно использовать HTML-теги, например <b>жирный текст</b>.",
           position: "2 0 -3", // Координаты X, Y, Z
-          image: "https://images.unsplash.com/photo-1544928147-79a2dbc1f389?q=80&w=600&auto=format&fit=crop" // Можно указать картинку из папки assets/exhibit1.jpg
+          image: "assets/images.jpg" // Можно указать картинку из папки assets/exhibit1.jpg
         }
       ],
       
