@@ -133,33 +133,44 @@
     return url;
   }
 
-  /** Кнопка закрытия 3D модалки с четким белым крестиком X */
+  /** Кнопка закрытия 3D модалки — в том же стиле круглого бейджа, что и маркеры */
   function makeCloseBtnTex() {
-    const key = 'close_btn_tex_v1';
+    const key = 'close_btn_tex_v2';
     if (_texCache.has(key)) return _texCache.get(key);
 
-    const S = 128, C = 64;
+    const S = 256, CX = 128, CY = 128;
     const c = document.createElement('canvas');
     c.width = S; c.height = S;
     const ctx = c.getContext('2d');
 
+    ctx.clearRect(0, 0, S, S);
+
+    // Основной круг кнопки в стиле маркеров
     ctx.beginPath();
-    ctx.arc(C, C, 58, 0, Math.PI * 2);
-    ctx.fillStyle = '#EF4444';
+    ctx.arc(CX, CY, 118, 0, Math.PI * 2);
+    const grad = ctx.createRadialGradient(CX, CY, 30, CX, CY, 118);
+    grad.addColorStop(0, '#EF4444');
+    grad.addColorStop(1, '#B91C1C');
+    ctx.fillStyle = grad;
     ctx.fill();
 
+    // Белый кантик 8px как у круглых маркеров
     ctx.strokeStyle = '#FFFFFF';
-    ctx.lineWidth = 6;
+    ctx.lineWidth = 8;
     ctx.stroke();
 
-    // Белый жирный крестик X
-    ctx.beginPath();
-    ctx.moveTo(40, 40); ctx.lineTo(88, 88);
-    ctx.moveTo(88, 40); ctx.lineTo(40, 88);
+    // Белый четкий крестик X внутри
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.35)';
+    ctx.shadowBlur = 8;
     ctx.strokeStyle = '#FFFFFF';
-    ctx.lineWidth = 12;
+    ctx.lineWidth = 20;
     ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(80, 80); ctx.lineTo(176, 176);
+    ctx.moveTo(176, 80); ctx.lineTo(80, 176);
     ctx.stroke();
+    ctx.restore();
 
     const url = c.toDataURL();
     _texCache.set(key, url);
@@ -278,10 +289,10 @@
       this._ctx    = this._canvas.getContext('2d');
       this._texture= new THREE.CanvasTexture(this._canvas);
 
-      // Прогресс-слой поверх кружка (уменьшен в 2 раза)
+      // Прогресс-слой поверх кружка (масштабирован под маркер 0.135)
       this._progPlane = document.createElement('a-plane');
-      this._progPlane.setAttribute('width',  '0.23');
-      this._progPlane.setAttribute('height', '0.23');
+      this._progPlane.setAttribute('width',  '0.35');
+      this._progPlane.setAttribute('height', '0.35');
       this._progPlane.setAttribute('position', '0 0 0.03');
       this._progPlane.setAttribute('material', {
         shader: 'flat', transparent: true,
@@ -490,16 +501,16 @@
     plane.setAttribute('height', planeH);
     plane.setAttribute('material', 'shader:flat; transparent:true; opacity:1');
 
-    // Кнопка закрытия с четким белым крестиком X
+    // Кнопка закрытия — круглый бейдж в едином стиле
     const closeBtn = document.createElement('a-circle');
     closeBtn.classList.add('clickable');
-    closeBtn.setAttribute('radius', '0.22');
+    closeBtn.setAttribute('radius', '0.15');
     closeBtn.setAttribute('material', {
       src: makeCloseBtnTex(),
       shader: 'flat',
       transparent: true
     });
-    closeBtn.setAttribute('position', `${planeW / 2 - 0.14} ${planeH / 2 - 0.14} 0.05`);
+    closeBtn.setAttribute('position', `${planeW / 2 - 0.22} ${planeH / 2 - 0.22} 0.05`);
     closeBtn.setAttribute('gaze-interactable', `duration:${GAZE_DUR}; color:#EF4444`);
 
     closeBtn.addEventListener('click', closeModal3D);
@@ -723,7 +734,7 @@
     const prox    = sceneEl && sceneEl.components && sceneEl.components['proximity-manager'];
     if (prox) prox.clear();
 
-    // ── 1. ПЕРЕХОД: АККУРАТНЫЙ КРУЖОК (radius 0.09) СО СТРЕЛОЧКОЙ ──
+    // ── 1. ПЕРЕХОД: АККУРАТНЫЙ КРУЖОК (radius 0.135) СО СТРЕЛОЧКОЙ ──
     (room.links || []).forEach(lk => {
       const wrap = document.createElement('a-entity');
       wrap.setAttribute('position', lk.position);
@@ -734,7 +745,7 @@
 
       const circle = document.createElement('a-circle');
       circle.classList.add('clickable');
-      circle.setAttribute('radius', '0.09');
+      circle.setAttribute('radius', '0.135');
       circle.setAttribute('material', {
         src: makeTransitionCircleTex(),
         shader: 'flat',
@@ -745,13 +756,13 @@
       circle.setAttribute('gaze-interactable', `duration:${GAZE_DUR}; color:#38BDF8`);
       meshWrap.appendChild(circle);
 
-      // Название над кружком перехода (уменьшено в 2 раза)
+      // Название над кружком перехода
       const label = document.createElement('a-image');
       label.classList.add('marker-label');
       label.setAttribute('src', makeLabelTex(lk.label || 'Перейти во второй зал', false));
-      label.setAttribute('width', '0.65');
-      label.setAttribute('height', '0.15');
-      label.setAttribute('position', '0 0.18 0.02');
+      label.setAttribute('width', '0.98');
+      label.setAttribute('height', '0.225');
+      label.setAttribute('position', '0 0.25 0.02');
       label.setAttribute('material', 'shader:flat; transparent:true; opacity:0.95');
 
       const go = () => transitionToRoom(lk.target, lk.position);
@@ -768,7 +779,7 @@
       lC.appendChild(wrap);
     });
 
-    // ── 2. ЭКСПОНАТ: ТОЧНО ТАКОЙ ЖЕ АККУРАТНЫЙ КРУЖОК (radius 0.09) ──
+    // ── 2. ЭКСПОНАТ: ТОЧНО ТАКОЙ ЖЕ АККУРАТНЫЙ КРУЖОК (radius 0.135) ──
     (room.exhibits || []).forEach(ex => {
       const wrap = document.createElement('a-entity');
       wrap.setAttribute('position', ex.position);
@@ -779,25 +790,25 @@
 
       const circle = document.createElement('a-circle');
       circle.classList.add('clickable');
-      circle.setAttribute('radius', '0.09');
+      circle.setAttribute('radius', '0.135');
       circle.setAttribute('material', 'color:#F59E0B; shader:flat; transparent:true; opacity:0.95');
       circle.setAttribute('animation', 'property:scale; dir:alternate; dur:1500; loop:true; to:1.18 1.18 1.18; easing:easeInOutSine');
       circle.setAttribute('gaze-interactable', `duration:${GAZE_DUR}; color:#F59E0B`);
 
       const dot = document.createElement('a-circle');
-      dot.setAttribute('radius', '0.03');
+      dot.setAttribute('radius', '0.045');
       dot.setAttribute('position', '0 0 0.01');
       dot.setAttribute('material', 'color:#FFFFFF; shader:flat');
       circle.appendChild(dot);
       meshWrap.appendChild(circle);
 
-      // Название над кружком экспоната (уменьшено в 2 раза)
+      // Название над кружком экспоната
       const label = document.createElement('a-image');
       label.classList.add('marker-label');
       label.setAttribute('src', makeLabelTex(ex.title, true));
-      label.setAttribute('width', '0.65');
-      label.setAttribute('height', '0.15');
-      label.setAttribute('position', '0 0.18 0.02');
+      label.setAttribute('width', '0.98');
+      label.setAttribute('height', '0.225');
+      label.setAttribute('position', '0 0.25 0.02');
       label.setAttribute('material', 'shader:flat; transparent:true; opacity:0.95');
 
       const doOpen = () => {
@@ -900,7 +911,15 @@
     sceneEl.addEventListener('enter-vr', () => {
       window.isVRMode = true;
       if (vrBtn)    vrBtn.style.display = 'none';
-      if (camera)   camera.setAttribute('look-controls', 'magicWindowTrackingEnabled:true; touchEnabled:false');
+      if (camera) {
+        camera.setAttribute('look-controls', {
+          enabled: true,
+          touchEnabled: false,
+          magicWindowTrackingEnabled: true,
+          reverseTouchDrag: false,
+          mouseEnabled: false
+        });
+      }
       if (mCursor)  mCursor.setAttribute('raycaster', 'enabled:false');
       if (vrCursor) { vrCursor.setAttribute('visible', 'true'); vrCursor.setAttribute('raycaster', 'enabled:true; objects:.clickable; far:50; interval:20'); }
       if (badge)    badge.textContent = '👓 VR Cardboard';
@@ -913,7 +932,7 @@
         camera.setAttribute('look-controls', {
           enabled: true,
           touchEnabled: true,
-          magicWindowTrackingEnabled: true,
+          magicWindowTrackingEnabled: false,
           reverseTouchDrag: false,
           mouseEnabled: false
         });
@@ -1051,7 +1070,7 @@
       camera.setAttribute('look-controls', {
         enabled: true,
         touchEnabled: true,
-        magicWindowTrackingEnabled: true,
+        magicWindowTrackingEnabled: false,
         reverseTouchDrag: false,
         mouseEnabled: false
       });

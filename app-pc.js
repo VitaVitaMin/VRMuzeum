@@ -319,7 +319,7 @@
     if (skyInc) {
       skyInc.setAttribute('src', next.panorama);
       skyInc.setAttribute('visible', 'true');
-      skyInc.setAttribute('material', 'opacity:0; transparent:true; shader:flat; color:#FFFFFF');
+      skyInc.setAttribute('material', 'opacity:0; transparent:true; shader:flat; side:back; color:#FFFFFF');
     }
 
     if (sceneEl) sceneEl.classList.add('street-warp-active');
@@ -356,13 +356,13 @@
       if (skyCur) {
         skyCur.removeAttribute('animation__fo');
         skyCur.setAttribute('src', next.panorama);
-        skyCur.setAttribute('material', 'opacity:1; transparent:true; shader:flat; color:#FFFFFF');
+        skyCur.setAttribute('material', 'opacity:1; transparent:true; shader:flat; side:back; color:#FFFFFF');
       }
       if (skyInc) {
         skyInc.removeAttribute('animation__fi');
         skyInc.setAttribute('visible', 'false');
         skyInc.setAttribute('src', '');
-        skyInc.setAttribute('material', 'opacity:0; shader:flat; color:#FFFFFF');
+        skyInc.setAttribute('material', 'opacity:0; shader:flat; side:back; color:#FFFFFF');
       }
       if (camRig) { camRig.removeAttribute('animation__mv'); camRig.setAttribute('position', '0 0 0'); }
       if (sceneEl) sceneEl.classList.remove('street-warp-active');
@@ -402,7 +402,7 @@
     const prox    = sceneEl && sceneEl.components && sceneEl.components['proximity-manager'];
     if (prox) prox.clear();
 
-    // ── 1. ПЕРЕХОД: АККУРАТНЫЙ КРУЖОК (radius 0.09) СО СТРЕЛОЧКОЙ ──
+    // ── 1. ПЕРЕХОД: АККУРАТНЫЙ КРУЖОК (radius 0.135) СО СТРЕЛОЧКОЙ ──
     (room.links || []).forEach(lk => {
       const wrap = document.createElement('a-entity');
       wrap.setAttribute('position', lk.position);
@@ -413,7 +413,7 @@
 
       const circle = document.createElement('a-circle');
       circle.classList.add('clickable');
-      circle.setAttribute('radius', '0.09');
+      circle.setAttribute('radius', '0.135');
       circle.setAttribute('material', {
         src: makeTransitionCircleTex(),
         shader: 'flat',
@@ -423,13 +423,13 @@
       circle.setAttribute('animation', 'property:scale; dir:alternate; dur:1500; loop:true; to:1.18 1.18 1.18; easing:easeInOutSine');
       meshWrap.appendChild(circle);
 
-      // Название над кружком перехода (уменьшено в 2 раза)
+      // Название над кружком перехода
       const label = document.createElement('a-image');
       label.classList.add('marker-label');
       label.setAttribute('src', makeLabelTex(lk.label || 'Перейти во второй зал', false));
-      label.setAttribute('width', '0.65');
-      label.setAttribute('height', '0.15');
-      label.setAttribute('position', '0 0.18 0.02');
+      label.setAttribute('width', '0.98');
+      label.setAttribute('height', '0.225');
+      label.setAttribute('position', '0 0.25 0.02');
       label.setAttribute('material', 'shader:flat; transparent:true; opacity:0.95');
 
       const go = () => transitionToRoom(lk.target, lk.position);
@@ -451,7 +451,7 @@
       lC.appendChild(wrap);
     });
 
-    // ── 2. ЭКСПОНАТ: ТОЧНО ТАКОЙ ЖЕ АККУРАТНЫЙ КРУЖОК (radius 0.09) ──
+    // ── 2. ЭКСПОНАТ: ТОЧНО ТАКОЙ ЖЕ АККУРАТНЫЙ КРУЖОК (radius 0.135) ──
     (room.exhibits || []).forEach(ex => {
       const wrap = document.createElement('a-entity');
       wrap.setAttribute('position', ex.position);
@@ -462,24 +462,24 @@
 
       const circle = document.createElement('a-circle');
       circle.classList.add('clickable');
-      circle.setAttribute('radius', '0.09');
+      circle.setAttribute('radius', '0.135');
       circle.setAttribute('material', 'color:#F59E0B; shader:flat; transparent:true; opacity:0.95');
       circle.setAttribute('animation', 'property:scale; dir:alternate; dur:1500; loop:true; to:1.18 1.18 1.18; easing:easeInOutSine');
 
       const dot = document.createElement('a-circle');
-      dot.setAttribute('radius', '0.03');
+      dot.setAttribute('radius', '0.045');
       dot.setAttribute('position', '0 0 0.01');
       dot.setAttribute('material', 'color:#FFFFFF; shader:flat');
       circle.appendChild(dot);
       meshWrap.appendChild(circle);
 
-      // Название над кружком экспоната (уменьшено в 2 раза)
+      // Название над кружком экспоната
       const label = document.createElement('a-image');
       label.classList.add('marker-label');
       label.setAttribute('src', makeLabelTex(ex.title, true));
-      label.setAttribute('width', '0.65');
-      label.setAttribute('height', '0.15');
-      label.setAttribute('position', '0 0.18 0.02');
+      label.setAttribute('width', '0.98');
+      label.setAttribute('height', '0.225');
+      label.setAttribute('position', '0 0.25 0.02');
       label.setAttribute('material', 'shader:flat; transparent:true; opacity:0.95');
 
       circle.addEventListener('click', () => showHTMLModal(ex, wrap));
