@@ -373,11 +373,6 @@
   // ==========================================================================
   let hintDismissed = false;
   function setupTouch360() {
-    const camera = document.getElementById('main-camera');
-    if (!camera) return;
-    let active = false, lx = 0, ly = 0;
-    const SENS = 0.27;
-
     function dismissHint() {
       if (hintDismissed) return;
       hintDismissed = true;
@@ -389,30 +384,7 @@
       }
     }
 
-    window.addEventListener('touchstart', e => {
-      if (window.isVRMode || e.touches.length !== 1) return;
-      if (e.target.closest('#debug-panel,#debug-toggle-btn,#vr-modal,#exhibit-overlay')) return;
-      active = true; lx = e.touches[0].clientX; ly = e.touches[0].clientY;
-      setTimeout(dismissHint, 2000);
-    }, { passive: true });
-
-    window.addEventListener('touchmove', e => {
-      if (window.isVRMode || !active || e.touches.length !== 1) return;
-      const dx = e.touches[0].clientX - lx;
-      const dy = e.touches[0].clientY - ly;
-      lx = e.touches[0].clientX; ly = e.touches[0].clientY;
-      currentYaw  -= dx * SENS;
-      currentPitch = Math.max(-85, Math.min(85, currentPitch + dy * SENS));
-      camera.object3D.rotation.set(
-        THREE.MathUtils.degToRad(currentPitch),
-        THREE.MathUtils.degToRad(currentYaw),
-        0, 'YXZ'
-      );
-    }, { passive: true });
-
-    const end = () => { active = false; };
-    window.addEventListener('touchend',    end, { passive: true });
-    window.addEventListener('touchcancel', end, { passive: true });
+    window.addEventListener('touchstart', dismissHint, { passive: true, once: true });
   }
 
   // ==========================================================================
@@ -938,10 +910,13 @@
       window.isVRMode = false;
       if (vrBtn)  vrBtn.style.display = 'inline-flex';
       if (camera) {
-        const euler = new THREE.Euler().setFromQuaternion(camera.object3D.quaternion, 'YXZ');
-        currentPitch = THREE.MathUtils.radToDeg(euler.x);
-        currentYaw   = THREE.MathUtils.radToDeg(euler.y);
-        camera.setAttribute('look-controls', 'magicWindowTrackingEnabled:false; touchEnabled:false');
+        camera.setAttribute('look-controls', {
+          enabled: true,
+          touchEnabled: true,
+          magicWindowTrackingEnabled: true,
+          reverseTouchDrag: false,
+          mouseEnabled: false
+        });
       }
       if (vrCursor) { vrCursor.setAttribute('visible', 'false'); vrCursor.setAttribute('raycaster', 'enabled:false'); }
       if (mCursor)  mCursor.setAttribute('raycaster', 'enabled:true');
@@ -979,9 +954,13 @@
       roomSel.addEventListener('change', () => transitionToRoom(roomSel.value));
     }
 
+    let currentFps = 60;
     const toggle = () => {
       debugActive = !debugActive;
-      if (panel) panel.style.display = debugActive ? 'block' : 'none';
+      if (panel) {
+        panel.style.display = debugActive ? 'block' : 'none';
+        if (debugActive && fpsEl) fpsEl.textContent = `${currentFps} FPS`;
+      }
     };
     if (toggleBtn) toggleBtn.addEventListener('click', toggle);
     if (closeBtn)  closeBtn.addEventListener('click',  toggle);
@@ -997,8 +976,7 @@
     if (resetBtn) {
       resetBtn.addEventListener('click', () => {
         const cam = document.getElementById('main-camera');
-        currentPitch = 0; currentYaw = 0;
-        if (cam) cam.object3D.rotation.set(0, 0, 0, 'YXZ');
+        if (cam) cam.setAttribute('rotation', '0 0 0');
       });
     }
     if (vrTestBtn) {
@@ -1018,10 +996,10 @@
       tick: function () {
         fc++;
         const now = performance.now();
-        if (now - lt >= 500) {
-          const fps = Math.round((fc * 1000) / (now - lt));
+        if (now - lt >= 400) {
+          currentFps = Math.round((fc * 1000) / (now - lt));
           fc = 0; lt = now;
-          if (debugActive && fpsEl) fpsEl.textContent = `${fps} FPS`;
+          if (fpsEl) fpsEl.textContent = `${currentFps} FPS`;
         }
         if (!debugActive) return;
 
@@ -1068,8 +1046,16 @@
 
     document.body.classList.add('is-mobile');
 
-    const camera   = document.getElementById('main-camera');
-    if (camera) camera.setAttribute('look-controls', 'magicWindowTrackingEnabled:false; touchEnabled:false');
+    const camera = document.getElementById('main-camera');
+    if (camera) {
+      camera.setAttribute('look-controls', {
+        enabled: true,
+        touchEnabled: true,
+        magicWindowTrackingEnabled: true,
+        reverseTouchDrag: false,
+        mouseEnabled: false
+      });
+    }
 
     const sceneEl = document.getElementById('museum-scene');
     if (sceneEl) sceneEl.setAttribute('proximity-manager', '');

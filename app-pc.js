@@ -534,9 +534,13 @@
       roomSel.addEventListener('change', () => transitionToRoom(roomSel.value));
     }
 
+    let currentFps = 60;
     const toggle = () => {
       debugActive = !debugActive;
-      if (panel) panel.style.display = debugActive ? 'block' : 'none';
+      if (panel) {
+        panel.style.display = debugActive ? 'block' : 'none';
+        if (debugActive && fpsEl) fpsEl.textContent = `${currentFps} FPS`;
+      }
     };
     if (toggleBtn) toggleBtn.addEventListener('click', toggle);
     if (closeBtn)  closeBtn.addEventListener('click', toggle);
@@ -577,10 +581,10 @@
       tick: function () {
         fc++;
         const now = performance.now();
-        if (now - lt >= 500) {
-          const fps = Math.round((fc * 1000) / (now - lt));
+        if (now - lt >= 400) {
+          currentFps = Math.round((fc * 1000) / (now - lt));
           fc = 0; lt = now;
-          if (debugActive && fpsEl) fpsEl.textContent = `${fps} FPS`;
+          if (fpsEl) fpsEl.textContent = `${currentFps} FPS`;
         }
         if (!debugActive) return;
 
