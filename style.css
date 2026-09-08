@@ -28,12 +28,13 @@ a-scene {
   top: 20px;
   left: 20px;
   z-index: 10;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
+  background: rgba(30, 30, 36, 0.85);
+  backdrop-filter: blur(12px);
   padding: 12px 24px;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
 }
 
 #ui-header h1 {

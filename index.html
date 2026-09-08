@@ -25,8 +25,7 @@
     embedded 
     loading-screen="enabled: false"
     vr-mode-ui="enabled: true"
-    renderer="colorManagement: true; antialias: true; highRefreshRate: true;"
-    antialias="true"
+    renderer="colorManagement: true; antialias: true; physicallyCorrectLights: true; highRefreshRate: true;"
   >
     <!-- Освещение -->
     <a-light type="ambient" color="#FFFFFF" intensity="1.5"></a-light>
@@ -51,17 +50,6 @@
       
       <!-- VR Инструкция (изначально скрыта) -->
       <a-entity id="vr-instructions" position="0 0 -1.5" visible="false">
-        <a-plane width="1.6" height="0.9" color="#1a1a24" opacity="0.95"></a-plane>
-        <a-plane width="1.62" height="0.92" color="#FF9800" position="0 0 -0.01" opacity="0.8"></a-plane>
-        
-        <a-text value="Режим VR Активирован" align="center" position="0 0.3 0.01" color="#FF9800" width="2"></a-text>
-        <a-text value="Сенсорное управление экраном отключено.\n\nДля взаимодействия наведите прицел\nна объект и удерживайте 3 секунды." 
-                align="center" position="0 0.05 0.01" color="#DDD" width="1.5" wrap-count="40"></a-text>
-        
-        <a-entity id="vr-ok-btn" position="0 -0.25 0.02">
-          <a-plane width="0.6" height="0.15" color="#4CAF50" opacity="0.9"></a-plane>
-          <a-text value="Понятно (3 сек)" align="center" position="0 0 0.01" width="1.5" color="#FFF"></a-text>
-        </a-entity>
       </a-entity>
 
       <!-- VR Fade для плавных переходов (белый свет/blur) -->

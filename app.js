@@ -83,21 +83,130 @@ const exhibitsContainer = document.getElementById('exhibits-container');
 const modalContainer = document.getElementById('modal-container');
 const roomTitle = document.getElementById('room-title');
 
-// SVG код для стрелочки (закодирован для использования в A-Frame)
+// SVG код для стрелочки
 const ARROW_SVG = "data:image/svg+xml;charset=utf-8,%3Csvg width=%22100%22 height=%22100%22 viewBox=%220 0 100 100%22 fill=%22none%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cpath d=%22M20 70 L 50 30 L 80 70%22 stroke=%22white%22 stroke-width=%2212%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E";
 
-// Функция переходов с WebGL затемнением (эффект белой вспышки/засветления для плавности)
+// Функция генерации текстуры текста высокого качества (решает проблему с кириллицей)
+function createTextTexture(text, color = '#FFFFFF', bg = false) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    if (bg) {
+        ctx.fillStyle = 'rgba(20, 20, 24, 0.7)';
+        ctx.beginPath();
+        if(ctx.roundRect) ctx.roundRect(0, 0, 1024, 256, 32);
+        else ctx.rect(0, 0, 1024, 256);
+        ctx.fill();
+    }
+    
+    ctx.font = 'bold 80px sans-serif';
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    // Тень для хорошей читаемости на любом фоне
+    ctx.shadowColor = 'rgba(0,0,0,1)';
+    ctx.shadowBlur = 12;
+    
+    // Обводка
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#000';
+    ctx.strokeText(text, 512, 128);
+    ctx.fillText(text, 512, 128);
+    
+    return canvas.toDataURL();
+}
+
+// Функция генерации VR инструкции
+function setupVRInstructions() {
+    const instr = document.getElementById('vr-instructions');
+    if (!instr) return;
+    instr.innerHTML = '';
+    
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = 1024;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    
+    // Фон
+    ctx.fillStyle = '#22222c';
+    ctx.beginPath();
+    if(ctx.roundRect) ctx.roundRect(0, 0, 1024, 1024, 64);
+    else ctx.rect(0,0,1024,1024);
+    ctx.fill();
+    
+    // Обводка
+    ctx.strokeStyle = '#FF9800';
+    ctx.lineWidth = 16;
+    ctx.stroke();
+    
+    // Заголовок
+    ctx.fillStyle = '#FF9800';
+    ctx.font = 'bold 80px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('РЕЖИМ VR', 512, 200);
+    
+    // Описание
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '50px sans-serif';
+    ctx.fillText('Сенсорное управление отключено.', 512, 400);
+    ctx.fillText('Для взаимодействия наведите', 512, 500);
+    ctx.fillText('прицел на кнопку (или объект)', 512, 580);
+    ctx.fillText('и удерживайте его 3 секунды.', 512, 660);
+    
+    // Кнопка (фон нарисуем прямо тут)
+    ctx.fillStyle = '#4CAF50';
+    ctx.beginPath();
+    if(ctx.roundRect) ctx.roundRect(256, 760, 512, 140, 40);
+    else ctx.rect(256, 760, 512, 140);
+    ctx.fill();
+    
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 50px sans-serif';
+    ctx.fillText('ПОНЯТНО (3 сек)', 512, 850);
+    
+    // Создаем саму панель
+    const plane = document.createElement('a-plane');
+    plane.setAttribute('width', '2.5');
+    plane.setAttribute('height', '2.5');
+    plane.setAttribute('material', 'shader: flat; transparent: true');
+    plane.setAttribute('src', canvas.toDataURL());
+    
+    // Интерактивная зона для кнопки "Понятно"
+    const btn = document.createElement('a-plane');
+    btn.setAttribute('id', 'vr-ok-btn');
+    btn.setAttribute('width', '1.25');
+    btn.setAttribute('height', '0.35');
+    btn.setAttribute('position', '0 -0.85 0.05');
+    // Невидимая кнопка поверх нарисованной
+    btn.setAttribute('material', 'opacity: 0; transparent: true');
+    btn.setAttribute('gaze-interactable', 'duration: 3000; color: #FFF; ringInner: 0.15; ringOuter: 0.2');
+    
+    btn.addEventListener('action-trigger', () => {
+        instr.setAttribute('visible', 'false');
+        btn.classList.remove('clickable');
+    });
+    
+    instr.appendChild(plane);
+    instr.appendChild(btn);
+}
+
+// Функция переходов с WebGL затемнением
 function triggerTransition(callback) {
   const vrFade = document.getElementById('vr-fade');
   if (!vrFade) { callback(); return; }
   
-  // Анимируем появление белого света
   vrFade.setAttribute('animation__fadein', 'property: opacity; from: 0; to: 1; dur: 400; easing: easeInOutQuad');
   
   setTimeout(() => {
-    callback(); // Меняем сцену, пока экран залит белым
+    callback();
     
-    // Снимаем засветку
     setTimeout(() => {
         vrFade.setAttribute('animation__fadeout', 'property: opacity; from: 1; to: 0; dur: 800; easing: easeInOutQuad');
         vrFade.removeAttribute('animation__fadein');
@@ -115,48 +224,40 @@ function loadScene(roomId) {
     console.error("Room not found:", roomId);
     return;
   }
+  
+  // Сохраняем состояние в URL без перезагрузки
+  window.history.replaceState(null, null, '#' + roomId);
 
   const loadAction = () => {
-    // Меняем текстуру неба
     sky.setAttribute('src', room.panorama);
-    
-    // Обновляем заголовок
     roomTitle.innerText = room.name;
 
-    // Очищаем старые элементы
     linksContainer.innerHTML = '';
     exhibitsContainer.innerHTML = '';
-    closeModal3D(); // Закрываем 3D модалки при смене комнаты
+    closeModal3D();
 
-    // Генерируем переходы (Ссылки)
     if (room.links) {
       room.links.forEach(lk => {
         const wrap = document.createElement('a-entity');
         wrap.setAttribute('position', lk.position);
         wrap.setAttribute('look-at', '[camera]');
 
-        // Сама картинка стрелочки
         const marker = document.createElement('a-image');
         marker.classList.add('clickable');
         marker.setAttribute('src', ARROW_SVG);
         marker.setAttribute('scale', '0.5 0.5 0.5');
-        marker.setAttribute('material', 'color: #FFFFFF; shader: flat; transparent: true; opacity: 0.7');
-        // Плавная анимация прыжка вверх-вниз
+        marker.setAttribute('material', 'color: #FFFFFF; shader: flat; transparent: true; opacity: 0.8');
         marker.setAttribute('animation', 'property: position; dir: alternate; dur: 800; loop: true; to: 0 0.1 0');
-        // Добавляем 3х-секундное взаимодействие
         marker.setAttribute('gaze-interactable', 'duration: 3000; color: #4CAF50; ringInner: 0.25; ringOuter: 0.3');
 
-        // Текстовая подпись
-        const label = document.createElement('a-text');
+        // Используем Canvas текстуру вместо a-text
+        const label = document.createElement('a-image');
         label.classList.add('marker-label');
-        label.setAttribute('value', lk.label);
-        label.setAttribute('align', 'center');
-        label.setAttribute('position', '0 0.4 0');
-        label.setAttribute('color', '#4CAF50');
-        label.setAttribute('scale', '0.8 0.8 0.8');
+        label.setAttribute('src', createTextTexture(lk.label, '#4CAF50'));
+        label.setAttribute('position', '0 0.45 0');
+        label.setAttribute('scale', '1.5 0.375 1'); // aspect ratio 1024x256 (4:1)
         label.setAttribute('visible', 'false');
 
-        // Обработка клика/взгляда - переход
         marker.addEventListener('action-trigger', () => loadScene(lk.target));
 
         wrap.appendChild(marker);
@@ -165,7 +266,6 @@ function loadScene(roomId) {
       });
     }
 
-    // Генерируем экспонаты
     if (room.exhibits) {
       room.exhibits.forEach(ex => {
         const wrap = document.createElement('a-entity');
@@ -173,25 +273,20 @@ function loadScene(roomId) {
         wrap.setAttribute('look-at', '[camera]');
         wrap.setAttribute('smart-marker', '');
 
-        // Круглый маркер (hotspot)
         const marker = document.createElement('a-circle');
         marker.classList.add('clickable', 'marker-mesh');
         marker.setAttribute('radius', '0.08');
         marker.setAttribute('material', 'color: #FFFFFF; shader: flat; transparent: true; opacity: 0.8');
-        // Добавляем 3х-секундное взаимодействие
         marker.setAttribute('gaze-interactable', 'duration: 3000; color: #FF9800; ringInner: 0.12; ringOuter: 0.15');
 
-        // Текстовая подпись
-        const label = document.createElement('a-text');
+        // Используем Canvas текстуру вместо a-text
+        const label = document.createElement('a-image');
         label.classList.add('marker-label');
-        label.setAttribute('value', ex.title);
-        label.setAttribute('align', 'center');
-        label.setAttribute('position', '0 0.25 0');
-        label.setAttribute('color', '#FFF');
-        label.setAttribute('scale', '0.8 0.8 0.8');
+        label.setAttribute('src', createTextTexture(ex.title, '#FFFFFF', true));
+        label.setAttribute('position', '0 0.3 0');
+        label.setAttribute('scale', '1.5 0.375 1');
         label.setAttribute('visible', 'false');
 
-        // Обработка клика/взгляда - открытие 3D плашки
         marker.addEventListener('action-trigger', () => {
           showModal3D(ex, wrap);
         });
@@ -204,7 +299,6 @@ function loadScene(roomId) {
   };
 
   if (isFirstLoad) {
-    // При первой загрузке просто показываем комнату и снимаем пелену
     loadAction();
     setTimeout(() => {
         const vrFade = document.getElementById('vr-fade');
@@ -214,7 +308,6 @@ function loadScene(roomId) {
     }, 1000);
     isFirstLoad = false;
   } else {
-    // Делаем плавный переход
     triggerTransition(loadAction);
   }
 }
@@ -289,24 +382,14 @@ function showModal3D(exhibit, parentWrap) {
 
   // Функция для обновления материала A-Frame
   const updateTexture = () => {
-    // Передаем canvas напрямую в material, чтобы избежать ошибок парсинга Base64 в A-Frame
-    modalPlane.setAttribute('material', {
-      src: canvas,
-      shader: 'flat',
-      transparent: true
-    });
-    
-    // Принудительно обновляем текстуру, если она уже существует
-    const mesh = modalPlane.getObject3D('mesh');
-    if (mesh && mesh.material && mesh.material.map) {
-      mesh.material.map.needsUpdate = true;
-    }
+    modalPlane.setAttribute('material', 'shader: flat; transparent: true');
+    modalPlane.setAttribute('src', canvas.toDataURL());
   };
 
   const drawContent = () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     // Фон
-    ctx.fillStyle = '#1e1e24';
+    ctx.fillStyle = '#2c2c38';
     ctx.beginPath();
     if (ctx.roundRect) {
         ctx.roundRect(0, 0, canvas.width, canvas.height, 64);
@@ -517,16 +600,15 @@ window.onload = () => {
   // Добавляем компонент на сцену, чтобы он работал каждый кадр
   document.querySelector('a-scene').setAttribute('coord-helper', '');
 
-  // Обработчик кнопки 'Понятно' в VR инструкции
-  const vrOkBtn = document.getElementById('vr-ok-btn');
-  if (vrOkBtn) {
-    vrOkBtn.setAttribute('gaze-interactable', 'duration: 3000; color: #4CAF50; ringInner: 0.15; ringOuter: 0.2');
-    vrOkBtn.addEventListener('action-trigger', () => {
-      document.getElementById('vr-instructions').setAttribute('visible', 'false');
-      vrOkBtn.classList.remove('clickable'); // Отключаем кликабельность после закрытия
-    });
+  // Генерируем 3D-инструкцию для VR-режима программно
+  setupVRInstructions();
+  
+  // URL Routing: Читаем комнату из хэша
+  let startRoom = window.location.hash.replace('#', '');
+  if (!startRoom || !CONFIG.rooms[startRoom]) {
+      startRoom = CONFIG.startRoom;
   }
   
-  // Запускаем первую сцену
-  loadScene(CONFIG.startRoom);
+  // Запускаем сцену
+  loadScene(startRoom);
 };
