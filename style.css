@@ -167,7 +167,7 @@ a-scene.street-warp-active {
    Подсказки управления
    ========================================================================== */
 
-#pc-hint, #mobile-hint {
+#pc-hint {
   display: none;
   position: absolute;
   bottom: 22px;
@@ -188,7 +188,30 @@ a-scene.street-warp-active {
   align-items: center;
 }
 
-body.is-pc #pc-hint     { display: flex; }
+#mobile-hint {
+  display: none;
+  position: absolute;
+  bottom: 84px; /* НАД кнопкой VR, не перекрывает её! */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  background: rgba(8, 11, 20, 0.85);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 8px 18px;
+  border-radius: 30px;
+  font-size: 12px;
+  color: #94A3B8;
+  pointer-events: none;
+  white-space: nowrap;
+  gap: 8px;
+  align-items: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  transition: opacity 0.4s ease;
+}
+
+body.is-pc #pc-hint         { display: flex; }
 body.is-mobile #mobile-hint { display: flex; }
 
 .hint-sep { color: #334155; }
@@ -219,6 +242,19 @@ body.is-mobile #mobile-hint { display: flex; }
   align-items: center;
   gap: 8px;
   white-space: nowrap;
+}
+
+/* Принудительное скрытие стандартной уродливой белой кнопки A-Frame VR */
+.a-enter-vr,
+.a-enter-vr-button,
+.a-enter-ar,
+.a-enter-ar-button,
+.a-orientation-modal,
+.a-loader-title {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 #custom-vr-btn:active {
@@ -642,10 +678,24 @@ body.is-mobile #mobile-hint { display: flex; }
   .ui-eyebrow { font-size: 9px; }
 
   #custom-vr-btn { bottom: 18px; padding: 11px 22px; font-size: 14px; }
+  #mobile-hint   { bottom: 72px; padding: 7px 15px; font-size: 11px; }
 
   #debug-toggle-btn { bottom: 12px; left: 12px; padding: 6px 11px; font-size: 10px; }
   #debug-panel { bottom: 52px; left: 12px; width: 272px; }
 
   .exhibit-title { font-size: 19px; }
   .exhibit-info  { padding: 18px 18px 24px; }
+}
+
+/* Специальная адаптация для горизонтального режима смартфона (альбомная ориентация) */
+@media (max-height: 520px) and (orientation: landscape) {
+  #ui-header { top: 8px; left: 10px; padding: 6px 12px; border-radius: 12px; }
+  #room-title { font-size: 14px; }
+  .ui-eyebrow { display: none; }
+  .ui-sub-row { margin-top: 3px; }
+  #device-mode-badge { font-size: 9px; padding: 2px 7px; }
+
+  #custom-vr-btn { bottom: 10px; padding: 8px 18px; font-size: 13px; }
+  #mobile-hint   { bottom: 54px; padding: 5px 14px; font-size: 11px; }
+  #debug-toggle-btn { bottom: 8px; left: 8px; padding: 4px 8px; font-size: 9px; }
 }
