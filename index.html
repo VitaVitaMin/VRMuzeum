@@ -20,28 +20,13 @@
     <p>Виртуальный Музей</p>
   </div>
 
-  <!-- Экран затемнения для плавных переходов -->
-  <div id="fade-overlay"></div>
-
-  <!-- Всплывающее окно экспоната -->
-  <div id="exhibit-modal" style="display: none;">
-    <div class="modal-content">
-      <button class="close-btn" id="modal-close-btn">✕</button>
-      <img id="modal-image" src="" alt="Экспонат" style="display: none;">
-      <div class="modal-text">
-        <h2 id="modal-title">Название</h2>
-        <div id="modal-desc">Описание</div>
-      </div>
-    </div>
-  </div>
-
   <!-- 3D Сцена -->
   <a-scene 
     embedded 
-    cursor="rayOrigin: mouse" 
-    raycaster="objects: .clickable" 
     loading-screen="enabled: false"
     vr-mode-ui="enabled: true"
+    renderer="colorManagement: true; antialias: true; highRefreshRate: true;"
+    antialias="true"
   >
     <!-- Освещение -->
     <a-light type="ambient" color="#FFFFFF" intensity="1.5"></a-light>
@@ -49,12 +34,39 @@
     <!-- Панорама -->
     <a-sky id="sky-pano" src="" rotation="0 -90 0" material="shader: flat; color: #FFF;"></a-sky>
 
-    <!-- Контейнеры для точек -->
+    <!-- Контейнеры для точек и 3D панелей -->
     <a-entity id="links-container"></a-entity>
     <a-entity id="exhibits-container"></a-entity>
+    <a-entity id="modal-container"></a-entity>
+
+    <!-- Мышиный курсор для 2D режима (ПК / Мобильный без VR) -->
+    <a-entity id="mouse-cursor" cursor="rayOrigin: mouse" raycaster="objects: .clickable"></a-entity>
 
     <!-- Камера -->
-    <a-camera id="main-camera" look-controls="magicWindowTrackingEnabled: false; touchEnabled: true; reverseMouseDrag: true; reverseTouchDrag: true" wasd-controls="enabled: false"></a-camera>
+    <a-camera id="main-camera" look-controls="magicWindowTrackingEnabled: false; touchEnabled: true; reverseMouseDrag: true; reverseTouchDrag: true" wasd-controls="enabled: false">
+      <!-- VR прицел (изначально выключен, включается только в VR) -->
+      <a-entity id="vr-cursor" visible="false" cursor="fuse: false" raycaster="objects: .clickable; enabled: false" position="0 0 -1"
+                geometry="primitive: ring; radiusInner: 0.015; radiusOuter: 0.025"
+                material="color: #FFF; shader: flat; transparent: true; opacity: 0.7"></a-entity>
+      
+      <!-- VR Инструкция (изначально скрыта) -->
+      <a-entity id="vr-instructions" position="0 0 -1.5" visible="false">
+        <a-plane width="1.6" height="0.9" color="#1a1a24" opacity="0.95"></a-plane>
+        <a-plane width="1.62" height="0.92" color="#FF9800" position="0 0 -0.01" opacity="0.8"></a-plane>
+        
+        <a-text value="Режим VR Активирован" align="center" position="0 0.3 0.01" color="#FF9800" width="2"></a-text>
+        <a-text value="Сенсорное управление экраном отключено.\n\nДля взаимодействия наведите прицел\nна объект и удерживайте 3 секунды." 
+                align="center" position="0 0.05 0.01" color="#DDD" width="1.5" wrap-count="40"></a-text>
+        
+        <a-entity id="vr-ok-btn" position="0 -0.25 0.02">
+          <a-plane width="0.6" height="0.15" color="#4CAF50" opacity="0.9"></a-plane>
+          <a-text value="Понятно (3 сек)" align="center" position="0 0 0.01" width="1.5" color="#FFF"></a-text>
+        </a-entity>
+      </a-entity>
+
+      <!-- VR Fade для плавных переходов (белый свет/blur) -->
+      <a-sphere id="vr-fade" radius="0.1" position="0 0 -0.05" material="color: #FFF; shader: flat; transparent: true; opacity: 1; side: back"></a-sphere>
+    </a-camera>
   </a-scene>
 
   <!-- Кнопка и панель для показа координат -->
