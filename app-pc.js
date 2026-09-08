@@ -316,7 +316,7 @@ window.onload = () => {
   if (coordBtn) coordBtn.addEventListener('click', toggleCoords);
   document.querySelector('a-scene').setAttribute('coord-helper', '');
   
-  let startRoom = window.location.hash.replace('#', '');
+  setupVRToggle(); let startRoom = window.location.hash.replace('#', '');
   if (!startRoom || !CONFIG.rooms[startRoom]) startRoom = CONFIG.startRoom;
   loadScene(startRoom);
 };
@@ -329,3 +329,51 @@ AFRAME.registerComponent('smart-marker', {
     this.el.addEventListener('mouseleave', () => this.label.setAttribute('visible', 'false'));
   }
 });
+// VR UI Logic
+function setupVRToggle() {
+  const sceneEl = document.querySelector('a-scene');
+  const vrBtn = document.getElementById('custom-vr-btn');
+  
+  if (vrBtn) {
+    // Включает VR по клику (работает в том числе для Cardboard)
+    vrBtn.addEventListener('click', () => {
+      sceneEl.enterVR();
+    });
+  }
+
+  if (sceneEl) {
+    sceneEl.addEventListener('enter-vr', () => {
+      window.isVRMode = true;
+      if (vrBtn) vrBtn.style.display = 'none';
+      
+      const mouseCursor = document.getElementById('mouse-cursor');
+      if (mouseCursor) mouseCursor.setAttribute('raycaster', 'enabled: false');
+      
+      const vrCursor = document.getElementById('vr-cursor');
+      if (vrCursor) {
+        vrCursor.setAttribute('visible', 'true');
+        vrCursor.setAttribute('raycaster', 'enabled: true');
+      }
+      
+      const vrInstr = document.getElementById('vr-instructions');
+      if (vrInstr) vrInstr.setAttribute('visible', 'true');
+    });
+
+    sceneEl.addEventListener('exit-vr', () => {
+      window.isVRMode = false;
+      if (vrBtn) vrBtn.style.display = 'block';
+      
+      const mouseCursor = document.getElementById('mouse-cursor');
+      if (mouseCursor) mouseCursor.setAttribute('raycaster', 'enabled: true');
+      
+      const vrCursor = document.getElementById('vr-cursor');
+      if (vrCursor) {
+        vrCursor.setAttribute('visible', 'false');
+        vrCursor.setAttribute('raycaster', 'enabled: false');
+      }
+      
+      const vrInstr = document.getElementById('vr-instructions');
+      if (vrInstr) vrInstr.setAttribute('visible', 'false');
+    });
+  }
+}
