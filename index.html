@@ -67,15 +67,9 @@
   >
     <a-light type="ambient" color="#FFFFFF" intensity="1.8"></a-light>
 
-    <!-- Предзагрузка панорам для мгновенного и надежного рендеринга -->
-    <a-assets timeout="8000">
-      <img id="pano-room1" src="assets/360_1.jpg" crossorigin="anonymous">
-      <img id="pano-room2" src="assets/360_2.jpg" crossorigin="anonymous">
-    </a-assets>
-
-    <!-- 360° панорамы -->
-    <a-sky id="sky-pano"          src="#pano-room1" rotation="0 -90 0" material="shader: flat; transparent: true; opacity: 1; color: #FFFFFF"></a-sky>
-    <a-sky id="sky-pano-incoming" src=""            rotation="0 -90 0" visible="false" material="shader: flat; transparent: true; opacity: 0; color: #FFFFFF"></a-sky>
+    <!-- 360° панорамы: side: back гарантирует отображение текстуры внутри купола на всех мобильных устройствах -->
+    <a-sky id="sky-pano"          src="assets/360_1.jpg" rotation="0 -90 0" material="shader: flat; side: back; transparent: true; opacity: 1; color: #FFFFFF"></a-sky>
+    <a-sky id="sky-pano-incoming" src=""                 rotation="0 -90 0" visible="false" material="shader: flat; side: back; transparent: true; opacity: 0; color: #FFFFFF"></a-sky>
 
     <!-- Контейнеры объектов -->
     <a-entity id="links-container"></a-entity>

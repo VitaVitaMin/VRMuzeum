@@ -640,7 +640,7 @@
     if (skyInc) {
       skyInc.setAttribute('src', next.panorama);
       skyInc.setAttribute('visible', 'true');
-      skyInc.setAttribute('material', 'opacity:0; transparent:true; shader:flat; color:#FFFFFF');
+      skyInc.setAttribute('material', 'opacity:0; transparent:true; shader:flat; side:back; color:#FFFFFF');
     }
 
     if (sceneEl) sceneEl.classList.add('street-warp-active');
@@ -677,13 +677,13 @@
       if (skyCur) {
         skyCur.removeAttribute('animation__fo');
         skyCur.setAttribute('src', next.panorama);
-        skyCur.setAttribute('material', 'opacity:1; transparent:true; shader:flat; color:#FFFFFF');
+        skyCur.setAttribute('material', 'opacity:1; transparent:true; shader:flat; side:back; color:#FFFFFF');
       }
       if (skyInc) {
         skyInc.removeAttribute('animation__fi');
         skyInc.setAttribute('visible', 'false');
         skyInc.setAttribute('src', '');
-        skyInc.setAttribute('material', 'opacity:0; shader:flat; color:#FFFFFF');
+        skyInc.setAttribute('material', 'opacity:0; shader:flat; side:back; color:#FFFFFF');
       }
       if (camRig) { camRig.removeAttribute('animation__mv'); camRig.setAttribute('position', '0 0 0'); }
       if (sceneEl) sceneEl.classList.remove('street-warp-active');
