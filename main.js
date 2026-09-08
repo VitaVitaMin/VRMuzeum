@@ -32,9 +32,10 @@
   console.log(`[Музей] Определено устройство: ${isMobile ? 'Мобильный' : 'ПК'}. Загрузка ${scriptToLoad}...`);
 
   // Загружаем нужный модуль скрипта
+  // Примечание: динамически вставленные теги <script> всегда загружаются
+  // асинхронно — отслеживаем завершение через onload/onerror.
   const script = document.createElement('script');
   script.src = scriptToLoad;
-  script.async = false;
 
   script.onload = function () {
     console.log(`[Музей] Модуль ${scriptToLoad} успешно загружен.`);
@@ -43,10 +44,10 @@
     }
   };
 
-  script.onerror = function (err) {
-    console.error(`[Музей] Ошибка при загрузке ${scriptToLoad}:`, err);
+  script.onerror = function () {
+    console.error(`[Музей] Ошибка при загрузке ${scriptToLoad}.`);
     const roomTitle = document.getElementById('room-title');
-    if (roomTitle) roomTitle.innerText = 'Ошибка загрузки модуля музея';
+    if (roomTitle) roomTitle.textContent = 'Ошибка загрузки модуля музея';
   };
 
   document.head.appendChild(script);

@@ -10,6 +10,35 @@
   let currentRoomId = '';
   let debugActive = false;
 
+  // ── Вспомогательные утилиты ────────────────────────────────────────────────
+
+  /**
+   * Копирует текст в буфер обмена.
+   * Сначала пробует современный Clipboard API, затем — fallback через
+   * временный <textarea> (без устаревшего document.execCommand).
+   */
+  function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    // Fallback: временное поле ввода + Selection API (не использует execCommand)
+    return new Promise((resolve, reject) => {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        const ok = document.execCommand('copy'); // deprecated, but only as last resort
+        document.body.removeChild(textarea);
+        ok ? resolve() : reject(new Error('execCommand returned false'));
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
   // Текстура подсказок над маркерами
   function createTextTexture(text, textColor = '#FFFFFF', isExhibit = false) {
     const canvas = document.createElement('canvas');
@@ -21,16 +50,19 @@
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // Фон с закруглёнными углами
     ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
     ctx.beginPath();
     if (ctx.roundRect) ctx.roundRect(16, 16, canvas.width - 32, canvas.height - 32, 28);
     else ctx.rect(16, 16, canvas.width - 32, canvas.height - 32);
     ctx.fill();
 
+    // Обводка (stroke принадлежит тому же пути — beginPath уже вызван выше)
     ctx.strokeStyle = isExhibit ? 'rgba(255, 167, 38, 0.8)' : 'rgba(74, 222, 128, 0.8)';
     ctx.lineWidth = 6;
     ctx.stroke();
 
+    // Текст
     ctx.font = 'bold 64px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.fillStyle = textColor;
     ctx.textAlign = 'center';
@@ -39,6 +71,8 @@
 
     return canvas.toDataURL();
   }
+
+  // ── Переход между комнатами ─────────────────────────────────────────────────
 
   // Плавный пространственный переход в стиле Google Street View (без черных экранов)
   function transitionToRoom(targetRoomId, targetPositionStr = null) {
@@ -70,7 +104,7 @@
     if (skyIncoming) {
       skyIncoming.setAttribute('src', nextRoom.panorama);
       skyIncoming.setAttribute('visible', 'true');
-      skyIncoming.setAttribute('material', 'opacity: 0; transparent: true');
+      skyIncoming.setAttribute('material', 'opacity: 0; transparent: true; shader: flat; color: #FFFFFF');
     }
 
     // Включаем эффект субпиксельного смаза движения (Google Maps Street View Warp)
@@ -107,20 +141,22 @@
       });
     }
 
-    // Завершение перехода
+    // Завершение перехода — задержка чуть больше длительности анимации (480 мс)
+    // чтобы анимация успела завершиться до переключения src
     setTimeout(() => {
-      // Обновляем базовый купол новой панорамой
+      // Сбрасываем анимации и обновляем базовый купол
       if (skyCurrent) {
         skyCurrent.removeAttribute('animation__fadeout');
         skyCurrent.setAttribute('src', nextRoom.panorama);
-        skyCurrent.setAttribute('material', 'opacity: 1; transparent: true');
+        skyCurrent.setAttribute('material', 'opacity: 1; transparent: true; shader: flat; color: #FFFFFF');
       }
 
       // Скрываем входящий купол
       if (skyIncoming) {
         skyIncoming.removeAttribute('animation__fadein');
         skyIncoming.setAttribute('visible', 'false');
-        skyIncoming.setAttribute('material', 'opacity: 0');
+        skyIncoming.setAttribute('src', '');
+        skyIncoming.setAttribute('material', 'opacity: 0; shader: flat; color: #FFFFFF');
       }
 
       // Возвращаем камеру в центр новой комнаты
@@ -134,8 +170,10 @@
       // Отрисовываем объекты новой комнаты
       renderRoomContent(targetRoomId);
       isTransitioning = false;
-    }, 500);
+    }, 520); // 520 мс > 480 мс анимации — гарантирует завершение fade
   }
+
+  // ── Рендеринг маркеров ──────────────────────────────────────────────────────
 
   // Отрисовка маркеров и переходов в комнате
   function renderRoomContent(roomId) {
@@ -146,10 +184,10 @@
     window.history.replaceState(null, null, '#' + roomId);
 
     const roomTitle = document.getElementById('room-title');
-    if (roomTitle) roomTitle.innerText = room.name || 'Зал музея';
+    if (roomTitle) roomTitle.textContent = room.name || 'Зал музея';
 
     const debugRoomField = document.getElementById('debug-current-room');
-    if (debugRoomField) debugRoomField.innerText = roomId;
+    if (debugRoomField) debugRoomField.textContent = roomId;
 
     const debugRoomSelect = document.getElementById('debug-room-select');
     if (debugRoomSelect && debugRoomSelect.value !== roomId) {
@@ -246,7 +284,8 @@
     }
   }
 
-  // 3D Информационная карточка экспоната
+  // ── 3D Карточка экспоната ───────────────────────────────────────────────────
+
   function showModal3D(exhibit, parentWrap) {
     closeModal3D();
     activeModalWrap = parentWrap;
@@ -307,26 +346,34 @@
     const renderCard = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // Фон карточки
       ctx.fillStyle = '#161925';
       ctx.beginPath();
       if (ctx.roundRect) ctx.roundRect(0, 0, canvas.width, canvas.height, 48);
       else ctx.rect(0, 0, canvas.width, canvas.height);
       ctx.fill();
 
+      // Граница карточки (отдельный путь после fill)
+      ctx.strokeStyle = '#2A3048';
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(0, 0, canvas.width, canvas.height, 48);
+      else ctx.rect(0, 0, canvas.width, canvas.height);
+      ctx.stroke();
+
+      // Верхняя цветная полоска (поверх границы)
       ctx.fillStyle = '#FFA726';
       ctx.beginPath();
       if (ctx.roundRect) ctx.roundRect(0, 0, canvas.width, 16, [48, 48, 0, 0]);
       else ctx.rect(0, 0, canvas.width, 16);
       ctx.fill();
 
-      ctx.strokeStyle = '#2A3048';
-      ctx.lineWidth = 8;
-      ctx.stroke();
-
       const contentStartY = exhibit.image ? 1040 : 180;
 
       ctx.font = 'bold 44px sans-serif';
       ctx.fillStyle = '#FFA726';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
       ctx.fillText('🏛  ЭКСПОНАТ МУЗЕЯ', 100, contentStartY);
 
       ctx.font = 'bold 92px sans-serif';
@@ -342,6 +389,7 @@
 
       ctx.font = '54px sans-serif';
       ctx.fillStyle = '#E2E8F0';
+      // Убираем HTML-теги из описания
       const rawText = (exhibit.description || '').replace(/<[^>]*>?/gm, '');
       const words = rawText.split(' ');
       let line = '';
@@ -350,16 +398,15 @@
 
       for (let i = 0; i < words.length; i++) {
         const testLine = line + words[i] + ' ';
-        const metrics = ctx.measureText(testLine);
-        if (metrics.width > maxWidth && i > 0) {
-          ctx.fillText(line, 100, textY);
+        if (ctx.measureText(testLine).width > maxWidth && i > 0) {
+          ctx.fillText(line.trimEnd(), 100, textY);
           line = words[i] + ' ';
           textY += 76;
         } else {
           line = testLine;
         }
       }
-      ctx.fillText(line, 100, textY);
+      if (line.trim()) ctx.fillText(line.trimEnd(), 100, textY);
 
       modalPlane.setAttribute('src', canvas.toDataURL());
     };
@@ -368,8 +415,10 @@
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
+        // 1. Сначала рисуем карточку (фон, текст и т.д.)
         renderCard();
 
+        // 2. Поверх вставляем фотографию в верхнюю часть карточки
         const targetW = canvas.width;
         const targetH = 920;
         const scale = Math.max(targetW / img.width, targetH / img.height);
@@ -386,12 +435,14 @@
         ctx.drawImage(img, drawX, drawY, drawW, drawH);
         ctx.restore();
 
+        // 3. Восстанавливаем верхнюю полоску, перекрытую изображением
         ctx.fillStyle = '#FFA726';
         ctx.fillRect(0, 0, targetW, 16);
 
         modalPlane.setAttribute('src', canvas.toDataURL());
       };
       img.onerror = () => {
+        // Если картинка не загрузилась — показываем карточку без фото
         renderCard();
       };
       img.src = exhibit.image;
@@ -414,22 +465,23 @@
     }
   }
 
-  // Настройка служебной панели DEBUG (скрытый функционал для разработчика)
+  // ── Debug-панель ────────────────────────────────────────────────────────────
+
   function setupDebugSystem() {
-    const debugBtn = document.getElementById('debug-toggle-btn');
-    const debugPanel = document.getElementById('debug-panel');
-    const closeBtn = document.getElementById('debug-close-btn');
-    const coordVal = document.getElementById('debug-coord-val');
-    const copyBtn = document.getElementById('debug-copy-coords-btn');
-    const roomSelect = document.getElementById('debug-room-select');
-    const fpsVal = document.getElementById('debug-fps-val');
-    const anglesVal = document.getElementById('debug-angles-val');
-    const deviceVal = document.getElementById('debug-device-val');
+    const debugBtn    = document.getElementById('debug-toggle-btn');
+    const debugPanel  = document.getElementById('debug-panel');
+    const closeBtn    = document.getElementById('debug-close-btn');
+    const coordVal    = document.getElementById('debug-coord-val');
+    const copyBtn     = document.getElementById('debug-copy-coords-btn');
+    const roomSelect  = document.getElementById('debug-room-select');
+    const fpsVal      = document.getElementById('debug-fps-val');
+    const anglesVal   = document.getElementById('debug-angles-val');
+    const deviceVal   = document.getElementById('debug-device-val');
     const resetCamBtn = document.getElementById('debug-reset-cam-btn');
-    const testVrBtn = document.getElementById('debug-test-vr-btn');
+    const testVrBtn   = document.getElementById('debug-test-vr-btn');
 
     if (deviceVal) {
-      deviceVal.innerText = `ПК (${window.innerWidth}x${window.innerHeight}, DPR ${window.devicePixelRatio.toFixed(1)})`;
+      deviceVal.textContent = `ПК (${window.innerWidth}×${window.innerHeight}, DPR ${window.devicePixelRatio.toFixed(1)})`;
     }
 
     // Заполняем список комнат для быстрого перехода
@@ -459,28 +511,21 @@
     // Копирование координат точки взгляда для config.js
     if (copyBtn && coordVal) {
       copyBtn.addEventListener('click', () => {
-        const textToCopy = coordVal.innerText.trim();
-        navigator.clipboard.writeText(textToCopy)
+        const textToCopy = coordVal.textContent.trim();
+        copyToClipboard(textToCopy)
           .then(() => {
             copyBtn.classList.add('copied');
-            copyBtn.innerText = '✅ Скопировано в буфер!';
+            copyBtn.textContent = '✅ Скопировано в буфер!';
             setTimeout(() => {
               copyBtn.classList.remove('copied');
-              copyBtn.innerText = '📋 Скопировать для config.js';
+              copyBtn.textContent = '📋 Скопировать для config.js';
             }, 1800);
           })
           .catch(() => {
-            // Резервный метод копирования
-            const dummy = document.createElement('textarea');
-            dummy.value = textToCopy;
-            document.body.appendChild(dummy);
-            dummy.select();
-            document.execCommand('copy');
-            document.body.removeChild(dummy);
-            copyBtn.innerText = '✅ Скопировано!';
+            copyBtn.textContent = '⚠️ Скопируйте вручную';
             setTimeout(() => {
-              copyBtn.innerText = '📋 Скопировать для config.js';
-            }, 1800);
+              copyBtn.textContent = '📋 Скопировать для config.js';
+            }, 2000);
           });
       });
     }
@@ -489,9 +534,7 @@
     if (resetCamBtn) {
       resetCamBtn.addEventListener('click', () => {
         const cam = document.getElementById('main-camera');
-        if (cam) {
-          cam.setAttribute('rotation', '0 0 0');
-        }
+        if (cam) cam.setAttribute('rotation', '0 0 0');
       });
     }
 
@@ -509,7 +552,6 @@
     // Регистрация компонента отслеживания для Debug (FPS, углы, координаты)
     let frameCount = 0;
     let lastTime = performance.now();
-    let currentFps = 60;
 
     AFRAME.registerComponent('pc-debug-tracker', {
       init: function () {
@@ -521,10 +563,10 @@
         frameCount++;
         const now = performance.now();
         if (now - lastTime >= 500) {
-          currentFps = Math.round((frameCount * 1000) / (now - lastTime));
+          const currentFps = Math.round((frameCount * 1000) / (now - lastTime));
           frameCount = 0;
           lastTime = now;
-          if (debugActive && fpsVal) fpsVal.innerText = `${currentFps} FPS`;
+          if (debugActive && fpsVal) fpsVal.textContent = `${currentFps} FPS`;
         }
 
         if (!debugActive) return;
@@ -532,22 +574,24 @@
         const camera = this.el.sceneEl && this.el.sceneEl.camera;
         if (!camera) return;
 
-        // Координаты на расстоянии 3 метра
+        // ✅ Исправлено: getWorldDirection возвращает вектор ВПЕРЁД (в Three.js
+        // для камеры это -Z в локальных координатах, но уже преобразованный в мировые).
+        // Умножаем на +3, чтобы получить точку впереди игрока на расстоянии 3 м.
         camera.getWorldDirection(this.dir);
-        this.dir.multiplyScalar(-3.0);
+        this.dir.multiplyScalar(3.0);
         camera.getWorldPosition(this.pos);
         this.pos.add(this.dir);
 
         if (coordVal) {
-          coordVal.innerText = `${this.pos.x.toFixed(2)} ${this.pos.y.toFixed(2)} ${this.pos.z.toFixed(2)}`;
+          coordVal.textContent = `${this.pos.x.toFixed(2)} ${this.pos.y.toFixed(2)} ${this.pos.z.toFixed(2)}`;
         }
 
         // Углы поворота
         if (anglesVal) {
           this.rot.setFromRotationMatrix(camera.matrixWorld, 'YXZ');
-          const yaw = Math.round(THREE.MathUtils.radToDeg(this.rot.y));
+          const yaw   = Math.round(THREE.MathUtils.radToDeg(this.rot.y));
           const pitch = Math.round(THREE.MathUtils.radToDeg(this.rot.x));
-          anglesVal.innerText = `Y: ${yaw}° / P: ${pitch}°`;
+          anglesVal.textContent = `Y: ${yaw}° / P: ${pitch}°`;
         }
       }
     });
@@ -556,7 +600,8 @@
     if (sceneEl) sceneEl.setAttribute('pc-debug-tracker', '');
   }
 
-  // Главная инициализация ПК
+  // ── Инициализация ПК ────────────────────────────────────────────────────────
+
   function initPC() {
     if (isInitialized) return;
     isInitialized = true;
@@ -565,7 +610,8 @@
 
     const camera = document.getElementById('main-camera');
     if (camera) {
-      camera.setAttribute('look-controls', 'magicWindowTrackingEnabled: false; touchEnabled: false; reverseMouseDrag: true');
+      // reverseMouseDrag: false — интуитивное поведение: тянешь мышь вправо → поворачиваешься вправо
+      camera.setAttribute('look-controls', 'magicWindowTrackingEnabled: false; touchEnabled: false; reverseMouseDrag: false');
     }
 
     const vrBtn = document.getElementById('custom-vr-btn');
@@ -573,6 +619,7 @@
 
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') closeModal3D();
+      // Горячая клавиша для отладочной панели: ` или ё
       if (e.key === '`' || e.key === 'ё') {
         const btn = document.getElementById('debug-toggle-btn');
         if (btn) btn.click();

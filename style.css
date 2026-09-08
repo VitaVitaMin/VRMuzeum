@@ -502,3 +502,48 @@ body.is-pc #pc-hint {
     width: 280px;
   }
 }
+
+/* ==========================================================================
+   Accessibility — видимый фокус для клавиатурной навигации
+   ========================================================================== */
+
+/* Скрываем стандартный outline только если НЕ используется клавиатура */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Показываем явный фокус при навигации с клавиатуры */
+:focus-visible {
+  outline: 2px solid #38BDF8;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* Кнопки с собственным border-radius получают скруглённый outline */
+#custom-vr-btn:focus-visible,
+#debug-toggle-btn:focus-visible,
+.vr-btn-primary:focus-visible,
+.vr-btn-secondary:focus-visible {
+  outline-offset: 4px;
+  border-radius: 50px;
+}
+
+.debug-copy-btn:focus-visible,
+.debug-action-btn:focus-visible,
+.debug-close-btn:focus-visible,
+#debug-reset-cam-btn:focus-visible,
+#debug-test-vr-btn:focus-visible {
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Hover для кнопок VR-модалки */
+.vr-btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+.vr-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #CBD5E1;
+}
+

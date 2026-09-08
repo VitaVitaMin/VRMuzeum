@@ -1,4 +1,5 @@
-// app-mobile.js — Мобильная версия: свободный обзор 360° (свайп по горизонтали и вертикали), Cardboard VR с гироскопом, таймер 3 сек, Google Maps warp, Debug-панель
+// app-mobile.js — Мобильная версия: свободный обзор 360° (свайп по горизонтали и вертикали),
+//                 Cardboard VR с нативным гироскопом A-Frame, таймер 3 сек, Google Maps warp, Debug-панель
 (function () {
   'use strict';
 
@@ -11,9 +12,38 @@
   let debugActive = false;
   window.isVRMode = false;
 
-  let gyroControls = null;
   let currentPitch = 0; // Наклон вверх/вниз в градусах (-85° .. +85°)
   let currentYaw = 0;   // Поворот влево/вправо в градусах (0 .. 360°)
+
+  // ── Вспомогательные утилиты ────────────────────────────────────────────────
+
+  /**
+   * Копирует текст в буфер обмена.
+   * Сначала пробует современный Clipboard API, затем — fallback через
+   * временный <textarea> без зависимости от устаревшего execCommand.
+   */
+  function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise((resolve, reject) => {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        const ok = document.execCommand('copy'); // deprecated, only as last resort
+        document.body.removeChild(textarea);
+        ok ? resolve() : reject(new Error('execCommand returned false'));
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  // ── Gaze-компонент (VR Cardboard, таймер 3 сек) ────────────────────────────
 
   // Компонент взаимодействия взглядом (Gaze Interaction) для Google Cardboard — ровно 3 секунды
   AFRAME.registerComponent('gaze-interactable', {
@@ -75,6 +105,8 @@
     }
   });
 
+  // ── Сенсорное управление 360° ──────────────────────────────────────────────
+
   // Полноценное сенсорное управление обзором на 360° (по горизонтали И вертикали)
   function setupMobileTouch360() {
     const sceneEl = document.getElementById('museum-scene');
@@ -82,11 +114,8 @@
     if (!sceneEl || !camera) return;
 
     let isTouching = false;
-    let startX = 0;
-    let startY = 0;
     let lastX = 0;
     let lastY = 0;
-    let totalDist = 0;
     const SENSITIVITY = 0.28;
 
     const onTouchStart = (e) => {
@@ -97,11 +126,8 @@
           return;
         }
         isTouching = true;
-        startX = e.touches[0].clientX;
-        startY = e.touches[0].clientY;
-        lastX = startX;
-        lastY = startY;
-        totalDist = 0;
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
       }
     };
 
@@ -116,16 +142,15 @@
 
       lastX = clientX;
       lastY = clientY;
-      totalDist += Math.hypot(deltaX, deltaY);
 
       // Вращение по горизонтали (Yaw 360°)
       currentYaw -= deltaX * SENSITIVITY;
 
-      // Вращение по вертикали (Pitch вверх / вниз с ограничением -85° .. +85°)
+      // Вращение по вертикали (Pitch вверх/вниз с ограничением -85° .. +85°)
       currentPitch += deltaY * SENSITIVITY;
       currentPitch = Math.max(-85, Math.min(85, currentPitch));
 
-      // Применяем вращение к камере в формате YXZ
+      // Применяем вращение к камере в порядке YXZ
       camera.object3D.rotation.set(
         THREE.MathUtils.degToRad(currentPitch),
         THREE.MathUtils.degToRad(currentYaw),
@@ -139,12 +164,13 @@
     };
 
     window.addEventListener('touchstart', onTouchStart, { passive: true });
-    window.addEventListener('touchmove', onTouchMove, { passive: true });
-    window.addEventListener('touchend', onTouchEnd, { passive: true });
-    window.addEventListener('touchcancel', onTouchEnd, { passive: true });
+    window.addEventListener('touchmove',  onTouchMove,  { passive: true });
+    window.addEventListener('touchend',   onTouchEnd,   { passive: true });
+    window.addEventListener('touchcancel', onTouchEnd,  { passive: true });
   }
 
-  // Текстура плашек над маркерами
+  // ── Canvas-текстуры ────────────────────────────────────────────────────────
+
   function createTextTexture(text, textColor = '#FFFFFF', isExhibit = false) {
     const canvas = document.createElement('canvas');
     canvas.width = 1024;
@@ -155,16 +181,19 @@
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // Фон с закруглёнными углами
     ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
     ctx.beginPath();
     if (ctx.roundRect) ctx.roundRect(16, 16, canvas.width - 32, canvas.height - 32, 28);
     else ctx.rect(16, 16, canvas.width - 32, canvas.height - 32);
     ctx.fill();
 
+    // Обводка (тот же путь, beginPath уже вызван)
     ctx.strokeStyle = isExhibit ? 'rgba(255, 167, 38, 0.8)' : 'rgba(74, 222, 128, 0.8)';
     ctx.lineWidth = 6;
     ctx.stroke();
 
+    // Текст
     ctx.font = 'bold 64px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.fillStyle = textColor;
     ctx.textAlign = 'center';
@@ -174,16 +203,20 @@
     return canvas.toDataURL();
   }
 
-  // Плавный пространственный переход Google Maps Street View (без черных экранов)
+  // ── Переход между комнатами ─────────────────────────────────────────────────
+
   function transitionToRoom(targetRoomId, targetPositionStr = null) {
     if (isTransitioning || targetRoomId === currentRoomId) return;
     const nextRoom = CONFIG.rooms && CONFIG.rooms[targetRoomId];
-    if (!nextRoom) return;
+    if (!nextRoom) {
+      console.warn(`[Музей Мобильный] Комната "${targetRoomId}" не найдена в CONFIG.`);
+      return;
+    }
 
     isTransitioning = true;
     closeModal3D();
 
-    const sceneEl = document.getElementById('museum-scene');
+    const sceneEl   = document.getElementById('museum-scene');
     const skyCurrent = document.getElementById('sky-pano');
     const skyIncoming = document.getElementById('sky-pano-incoming');
     const cameraRig = document.getElementById('camera-rig');
@@ -200,7 +233,7 @@
     if (skyIncoming) {
       skyIncoming.setAttribute('src', nextRoom.panorama);
       skyIncoming.setAttribute('visible', 'true');
-      skyIncoming.setAttribute('material', 'opacity: 0; transparent: true');
+      skyIncoming.setAttribute('material', 'opacity: 0; transparent: true; shader: flat; color: #FFFFFF');
     }
 
     if (sceneEl) sceneEl.classList.add('street-warp-active');
@@ -234,17 +267,19 @@
       });
     }
 
+    // Завершение перехода — ждём чуть дольше длительности анимации (480 мс)
     setTimeout(() => {
       if (skyCurrent) {
         skyCurrent.removeAttribute('animation__fadeout');
         skyCurrent.setAttribute('src', nextRoom.panorama);
-        skyCurrent.setAttribute('material', 'opacity: 1; transparent: true');
+        skyCurrent.setAttribute('material', 'opacity: 1; transparent: true; shader: flat; color: #FFFFFF');
       }
 
       if (skyIncoming) {
         skyIncoming.removeAttribute('animation__fadein');
         skyIncoming.setAttribute('visible', 'false');
-        skyIncoming.setAttribute('material', 'opacity: 0');
+        skyIncoming.setAttribute('src', '');
+        skyIncoming.setAttribute('material', 'opacity: 0; shader: flat; color: #FFFFFF');
       }
 
       if (cameraRig) {
@@ -256,10 +291,11 @@
 
       renderRoomContent(targetRoomId);
       isTransitioning = false;
-    }, 500);
+    }, 520); // 520 мс > 480 мс анимации
   }
 
-  // Отрисовка маркеров в комнате
+  // ── Рендеринг маркеров ──────────────────────────────────────────────────────
+
   function renderRoomContent(roomId) {
     currentRoomId = roomId;
     const room = CONFIG.rooms && CONFIG.rooms[roomId];
@@ -268,17 +304,17 @@
     window.history.replaceState(null, null, '#' + roomId);
 
     const roomTitle = document.getElementById('room-title');
-    if (roomTitle) roomTitle.innerText = room.name || 'Зал музея';
+    if (roomTitle) roomTitle.textContent = room.name || 'Зал музея';
 
     const debugRoomField = document.getElementById('debug-current-room');
-    if (debugRoomField) debugRoomField.innerText = roomId;
+    if (debugRoomField) debugRoomField.textContent = roomId;
 
     const debugRoomSelect = document.getElementById('debug-room-select');
     if (debugRoomSelect && debugRoomSelect.value !== roomId) {
       debugRoomSelect.value = roomId;
     }
 
-    const linksContainer = document.getElementById('links-container');
+    const linksContainer   = document.getElementById('links-container');
     const exhibitsContainer = document.getElementById('exhibits-container');
 
     if (linksContainer) linksContainer.innerHTML = '';
@@ -354,7 +390,8 @@
     }
   }
 
-  // 3D Карточка экспоната
+  // ── 3D Карточка экспоната ───────────────────────────────────────────────────
+
   function showModal3D(exhibit, parentWrap) {
     closeModal3D();
     activeModalWrap = parentWrap;
@@ -418,26 +455,34 @@
     const renderCard = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // Фон карточки
       ctx.fillStyle = '#161925';
       ctx.beginPath();
       if (ctx.roundRect) ctx.roundRect(0, 0, canvas.width, canvas.height, 48);
       else ctx.rect(0, 0, canvas.width, canvas.height);
       ctx.fill();
 
+      // Граница карточки (отдельный beginPath для stroke)
+      ctx.strokeStyle = '#2A3048';
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(0, 0, canvas.width, canvas.height, 48);
+      else ctx.rect(0, 0, canvas.width, canvas.height);
+      ctx.stroke();
+
+      // Верхняя цветная полоска
       ctx.fillStyle = '#FFA726';
       ctx.beginPath();
       if (ctx.roundRect) ctx.roundRect(0, 0, canvas.width, 16, [48, 48, 0, 0]);
       else ctx.rect(0, 0, canvas.width, 16);
       ctx.fill();
 
-      ctx.strokeStyle = '#2A3048';
-      ctx.lineWidth = 8;
-      ctx.stroke();
-
       const contentStartY = exhibit.image ? 1040 : 180;
 
       ctx.font = 'bold 44px sans-serif';
       ctx.fillStyle = '#FFA726';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
       ctx.fillText('🏛  ЭКСПОНАТ МУЗЕЯ', 100, contentStartY);
 
       ctx.font = 'bold 92px sans-serif';
@@ -461,16 +506,15 @@
 
       for (let i = 0; i < words.length; i++) {
         const testLine = line + words[i] + ' ';
-        const metrics = ctx.measureText(testLine);
-        if (metrics.width > maxWidth && i > 0) {
-          ctx.fillText(line, 100, textY);
+        if (ctx.measureText(testLine).width > maxWidth && i > 0) {
+          ctx.fillText(line.trimEnd(), 100, textY);
           line = words[i] + ' ';
           textY += 76;
         } else {
           line = testLine;
         }
       }
-      ctx.fillText(line, 100, textY);
+      if (line.trim()) ctx.fillText(line.trimEnd(), 100, textY);
 
       modalPlane.setAttribute('src', canvas.toDataURL());
     };
@@ -479,8 +523,10 @@
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
+        // 1. Рисуем карточку (фон + текст)
         renderCard();
 
+        // 2. Вставляем фото в верхнюю часть
         const targetW = canvas.width;
         const targetH = 920;
         const scale = Math.max(targetW / img.width, targetH / img.height);
@@ -497,6 +543,7 @@
         ctx.drawImage(img, drawX, drawY, drawW, drawH);
         ctx.restore();
 
+        // 3. Восстанавливаем верхнюю полоску
         ctx.fillStyle = '#FFA726';
         ctx.fillRect(0, 0, targetW, 16);
 
@@ -525,17 +572,19 @@
     }
   }
 
+  // ── VR Cardboard ────────────────────────────────────────────────────────────
+
   // Настройка режимов: Сенсорный Свайп 360° vs Режим VR Cardboard с гироскопом
   function setupVRModes() {
-    const sceneEl = document.querySelector('a-scene');
-    const vrBtn = document.getElementById('custom-vr-btn');
-    const vrModal = document.getElementById('vr-modal');
-    const vrStartBtn = document.getElementById('vr-start-btn');
+    const sceneEl     = document.querySelector('a-scene');
+    const vrBtn       = document.getElementById('custom-vr-btn');
+    const vrModal     = document.getElementById('vr-modal');
+    const vrStartBtn  = document.getElementById('vr-start-btn');
     const vrCancelBtn = document.getElementById('vr-cancel-btn');
-    const camera = document.getElementById('main-camera');
+    const camera      = document.getElementById('main-camera');
     const mouseCursor = document.getElementById('mouse-cursor');
-    const vrCursor = document.getElementById('vr-cursor');
-    const modeBadge = document.getElementById('device-mode-badge');
+    const vrCursor    = document.getElementById('vr-cursor');
+    const modeBadge   = document.getElementById('device-mode-badge');
 
     if (!sceneEl) return;
 
@@ -558,14 +607,12 @@
       vrStartBtn.addEventListener('click', () => {
         vrModal.style.display = 'none';
 
-        // Запрос разрешения на датчик ориентации (iOS Safari и современный Android)
-        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        // Запрос разрешения на датчик ориентации (iOS Safari 13+)
+        if (typeof DeviceOrientationEvent !== 'undefined' &&
+            typeof DeviceOrientationEvent.requestPermission === 'function') {
           DeviceOrientationEvent.requestPermission()
-            .then(perm => {
-              if (perm === 'granted') sceneEl.enterVR();
-              else sceneEl.enterVR();
-            })
-            .catch(() => sceneEl.enterVR());
+            .then(() => sceneEl.enterVR())
+            .catch(() => sceneEl.enterVR()); // всё равно пробуем войти
         } else {
           sceneEl.enterVR();
         }
@@ -573,26 +620,26 @@
     }
 
     // Вход в режим Cardboard VR
+    // ✅ Исправлено: мёртвый код THREE.DeviceOrientationControls удалён.
+    // A-Frame 1.5 / Three.js r148 управляет гироскопом самостоятельно через
+    // встроенный DeviceOrientationControls внутри look-controls при вызове enterVR().
+    // Нам достаточно включить look-controls при входе в VR.
     sceneEl.addEventListener('enter-vr', () => {
       window.isVRMode = true;
-      console.log('[Музей] Вход в Cardboard VR: активация гироскопа, таймер взгляда 3 сек');
+      console.log('[Музей] Вход в Cardboard VR: активация гироскопа через A-Frame look-controls');
 
       if (vrBtn) vrBtn.style.display = 'none';
 
-      // Подключаем трехмерный трекинг гироскопа очков
-      if (camera && THREE.DeviceOrientationControls) {
-        if (!gyroControls) {
-          gyroControls = new THREE.DeviceOrientationControls(camera.object3D);
-        }
-        gyroControls.enabled = true;
-        gyroControls.connect();
+      // Включаем look-controls для работы гироскопа (A-Frame делает всё сам)
+      if (camera) {
+        camera.setAttribute('look-controls', 'magicWindowTrackingEnabled: true; touchEnabled: false');
       }
 
-      // Переключаем курсоры
+      // Переключаем курсоры: отключаем мышиный, включаем VR-прицел
       if (mouseCursor) mouseCursor.setAttribute('raycaster', 'enabled: false');
       if (vrCursor) {
         vrCursor.setAttribute('visible', 'true');
-        vrCursor.setAttribute('raycaster', 'enabled: true');
+        vrCursor.setAttribute('raycaster', 'enabled: true; objects: .clickable; far: 50');
       }
 
       if (modeBadge) modeBadge.textContent = '👓 Режим VR Cardboard';
@@ -605,44 +652,44 @@
 
       if (vrBtn) vrBtn.style.display = 'inline-flex';
 
-      if (gyroControls) {
-        gyroControls.enabled = false;
-        gyroControls.disconnect();
-      }
-
-      // Синхронизируем углы тач-обзора с текущей ориентацией камеры
+      // Отключаем look-controls (управление вернётся к свайпу)
       if (camera) {
+        // Синхронизируем углы тач-обзора с текущей ориентацией камеры после VR
         const euler = new THREE.Euler().setFromQuaternion(camera.object3D.quaternion, 'YXZ');
         currentPitch = THREE.MathUtils.radToDeg(euler.x);
-        currentYaw = THREE.MathUtils.radToDeg(euler.y);
+        currentYaw   = THREE.MathUtils.radToDeg(euler.y);
+
+        camera.setAttribute('look-controls', 'magicWindowTrackingEnabled: false; touchEnabled: false');
       }
 
-      if (mouseCursor) mouseCursor.setAttribute('raycaster', 'enabled: true');
+      // Сначала отключаем VR-прицел, затем включаем мышиный курсор
       if (vrCursor) {
         vrCursor.setAttribute('visible', 'false');
         vrCursor.setAttribute('raycaster', 'enabled: false');
       }
+      if (mouseCursor) mouseCursor.setAttribute('raycaster', 'enabled: true');
 
       if (modeBadge) modeBadge.textContent = '📱 Мобильный (Сенсорный 360°)';
     });
   }
 
-  // Настройка служебной панели DEBUG для мобильных устройств
+  // ── Debug-панель ────────────────────────────────────────────────────────────
+
   function setupDebugSystem() {
-    const debugBtn = document.getElementById('debug-toggle-btn');
-    const debugPanel = document.getElementById('debug-panel');
-    const closeBtn = document.getElementById('debug-close-btn');
-    const coordVal = document.getElementById('debug-coord-val');
-    const copyBtn = document.getElementById('debug-copy-coords-btn');
-    const roomSelect = document.getElementById('debug-room-select');
-    const fpsVal = document.getElementById('debug-fps-val');
-    const anglesVal = document.getElementById('debug-angles-val');
-    const deviceVal = document.getElementById('debug-device-val');
+    const debugBtn    = document.getElementById('debug-toggle-btn');
+    const debugPanel  = document.getElementById('debug-panel');
+    const closeBtn    = document.getElementById('debug-close-btn');
+    const coordVal    = document.getElementById('debug-coord-val');
+    const copyBtn     = document.getElementById('debug-copy-coords-btn');
+    const roomSelect  = document.getElementById('debug-room-select');
+    const fpsVal      = document.getElementById('debug-fps-val');
+    const anglesVal   = document.getElementById('debug-angles-val');
+    const deviceVal   = document.getElementById('debug-device-val');
     const resetCamBtn = document.getElementById('debug-reset-cam-btn');
-    const testVrBtn = document.getElementById('debug-test-vr-btn');
+    const testVrBtn   = document.getElementById('debug-test-vr-btn');
 
     if (deviceVal) {
-      deviceVal.innerText = `Смартфон (${window.innerWidth}x${window.innerHeight}, DPR ${window.devicePixelRatio.toFixed(1)})`;
+      deviceVal.textContent = `Смартфон (${window.innerWidth}×${window.innerHeight}, DPR ${window.devicePixelRatio.toFixed(1)})`;
     }
 
     if (roomSelect && CONFIG.rooms) {
@@ -669,25 +716,19 @@
 
     if (copyBtn && coordVal) {
       copyBtn.addEventListener('click', () => {
-        const textToCopy = coordVal.innerText.trim();
-        navigator.clipboard.writeText(textToCopy)
+        const textToCopy = coordVal.textContent.trim();
+        copyToClipboard(textToCopy)
           .then(() => {
-            copyBtn.innerText = '✅ Скопировано в буфер!';
+            copyBtn.textContent = '✅ Скопировано в буфер!';
             setTimeout(() => {
-              copyBtn.innerText = '📋 Скопировать для config.js';
+              copyBtn.textContent = '📋 Скопировать для config.js';
             }, 1800);
           })
           .catch(() => {
-            const dummy = document.createElement('textarea');
-            dummy.value = textToCopy;
-            document.body.appendChild(dummy);
-            dummy.select();
-            document.execCommand('copy');
-            document.body.removeChild(dummy);
-            copyBtn.innerText = '✅ Скопировано!';
+            copyBtn.textContent = '⚠️ Скопируйте вручную';
             setTimeout(() => {
-              copyBtn.innerText = '📋 Скопировать для config.js';
-            }, 1800);
+              copyBtn.textContent = '📋 Скопировать для config.js';
+            }, 2000);
           });
       });
     }
@@ -713,7 +754,6 @@
 
     let frameCount = 0;
     let lastTime = performance.now();
-    let currentFps = 60;
 
     AFRAME.registerComponent('mobile-debug-tracker', {
       init: function () {
@@ -722,18 +762,13 @@
         this.rot = new THREE.Euler();
       },
       tick: function () {
-        // Обновление ориентации очков в режиме VR
-        if (window.isVRMode && gyroControls && gyroControls.enabled) {
-          gyroControls.update();
-        }
-
         frameCount++;
         const now = performance.now();
         if (now - lastTime >= 500) {
-          currentFps = Math.round((frameCount * 1000) / (now - lastTime));
+          const currentFps = Math.round((frameCount * 1000) / (now - lastTime));
           frameCount = 0;
           lastTime = now;
-          if (debugActive && fpsVal) fpsVal.innerText = `${currentFps} FPS`;
+          if (debugActive && fpsVal) fpsVal.textContent = `${currentFps} FPS`;
         }
 
         if (!debugActive) return;
@@ -741,20 +776,21 @@
         const camera = this.el.sceneEl && this.el.sceneEl.camera;
         if (!camera) return;
 
+        // ✅ Исправлено: умножаем на +3.0 (вектор ВПЕРЁД), а не на -3.0 (назад)
         camera.getWorldDirection(this.dir);
-        this.dir.multiplyScalar(-3.0);
+        this.dir.multiplyScalar(3.0);
         camera.getWorldPosition(this.pos);
         this.pos.add(this.dir);
 
         if (coordVal) {
-          coordVal.innerText = `${this.pos.x.toFixed(2)} ${this.pos.y.toFixed(2)} ${this.pos.z.toFixed(2)}`;
+          coordVal.textContent = `${this.pos.x.toFixed(2)} ${this.pos.y.toFixed(2)} ${this.pos.z.toFixed(2)}`;
         }
 
         if (anglesVal) {
           this.rot.setFromRotationMatrix(camera.matrixWorld, 'YXZ');
-          const yaw = Math.round(THREE.MathUtils.radToDeg(this.rot.y));
+          const yaw   = Math.round(THREE.MathUtils.radToDeg(this.rot.y));
           const pitch = Math.round(THREE.MathUtils.radToDeg(this.rot.x));
-          anglesVal.innerText = `Y: ${yaw}° / P: ${pitch}°`;
+          anglesVal.textContent = `Y: ${yaw}° / P: ${pitch}°`;
         }
       }
     });
@@ -763,12 +799,19 @@
     if (sceneEl) sceneEl.setAttribute('mobile-debug-tracker', '');
   }
 
-  // Главная инициализация мобильной версии
+  // ── Инициализация мобильной версии ─────────────────────────────────────────
+
   function initMobile() {
     if (isInitialized) return;
     isInitialized = true;
 
-    console.log('[Музей Мобильный] Запуск: свободный сенсорный обзор 360°, Cardboard VR с гироскопом...');
+    console.log('[Музей Мобильный] Запуск: свободный сенсорный обзор 360°, Cardboard VR с гироскопом A-Frame...');
+
+    // Включаем look-controls с отключёнными touch (свайп реализован вручную)
+    const camera = document.getElementById('main-camera');
+    if (camera) {
+      camera.setAttribute('look-controls', 'magicWindowTrackingEnabled: false; touchEnabled: false');
+    }
 
     setupMobileTouch360();
     setupVRModes();
