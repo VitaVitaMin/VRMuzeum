@@ -87,23 +87,18 @@
         look-controls="enabled: false"
         wasd-controls="enabled: false"
       >
-        <!-- VR прицел (только Cardboard) — комфортная точка на глубине объектов (-2.8м), устраняющая двоение -->
+        <!-- VR прицел (только Cardboard) — едва заметная микро-точка (не утомляет зрение) -->
         <a-entity
           id="vr-cursor"
           visible="false"
           cursor="fuse: false"
           raycaster="objects: .clickable; enabled: false; far: 50; interval: 20"
-          position="0 0 -2.8"
+          position="0 0 -2.5"
         >
           <a-circle
-            radius="0.020"
-            material="color: #FFFFFF; shader: flat; transparent: true; opacity: 0.95; depthTest: false"
+            radius="0.007"
+            material="color: #FFFFFF; shader: flat; transparent: true; opacity: 0.35; depthTest: false"
           ></a-circle>
-          <a-ring
-            radius-inner="0.036"
-            radius-outer="0.052"
-            material="color: #38BDF8; shader: flat; transparent: true; opacity: 0.8; depthTest: false"
-          ></a-ring>
         </a-entity>
       </a-camera>
     </a-entity>

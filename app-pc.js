@@ -1,8 +1,11 @@
 // =============================================================================
 // app-pc.js — PC версия:
-//             - Чистые стрелки перехода в стиле Google Street View (БЕЗ кругов и колец)
+//             - ОБА МАРКЕРА — АККУРАТНЫЕ КРУЖКИ ОДИНАКОВОГО РАЗМЕРА (radius 0.14)
+//               * Экспонат: янтарный кружок с белой точкой
+//               * Переход: голубой кружок со стрелочкой внутри
+//             - Устранено перекрытие всплывающего окна 3D текстом
 //             - Названия сразу видны при первой загрузке
-//             - Плавная прозрачность 3D элементов по мере удаления
+//             - Плавная прозрачность по мере удаления
 //             - HTML карточка экспоната
 // =============================================================================
 (function () {
@@ -10,9 +13,9 @@
 
   // ── Константы ────────────────────────────────────────────────────────────
   const TRANSITION_DUR = 380;   // мс перехода между комнатами
-  const LNK_NEAR       = 3.5;   // м: дистанция четкой видимости стрелки
+  const LNK_NEAR       = 3.5;   // м: дистанция четкой видимости
   const LNK_FAR        = 8.5;   // м: дистанция полупрозрачности
-  const EX_NEAR        = 3.2;   // м: дистанция четкой видимости экспоната
+  const EX_NEAR        = 3.2;   // м: дистанция четкой видимости
   const EX_FAR         = 7.5;   // м: дистанция полупрозрачности
 
   // ── Состояние ────────────────────────────────────────────────────────────
@@ -46,7 +49,7 @@
 
   // ── Canvas текстуры ───────────────────────────────────────────────────────
 
-  /** Аккуратная табличка с названием прямо над элементом */
+  /** Табличка с названием прямо над кружком */
   function makeLabelTex(text, isExhibit) {
     const key = `lbl|${text}|${isExhibit}`;
     if (_texCache.has(key)) return _texCache.get(key);
@@ -56,7 +59,6 @@
     c.width = W; c.height = H;
     const ctx = c.getContext('2d');
 
-    // Полупрозрачный стеклянный фон
     const bg = ctx.createLinearGradient(0, 0, 0, H);
     bg.addColorStop(0, isExhibit ? 'rgba(15, 10, 2, 0.94)' : 'rgba(3, 14, 24, 0.94)');
     bg.addColorStop(1, isExhibit ? 'rgba(28, 16, 4, 0.90)' : 'rgba(5, 22, 38, 0.90)');
@@ -66,15 +68,13 @@
     else ctx.rect(6, 6, W - 12, H - 12);
     ctx.fill();
 
-    // Неоновая рамка
     ctx.beginPath();
     if (ctx.roundRect) ctx.roundRect(6, 6, W - 12, H - 12, 20);
     else ctx.rect(6, 6, W - 12, H - 12);
-    ctx.strokeStyle = isExhibit ? 'rgba(245, 158, 11, 0.85)' : 'rgba(56, 189, 248, 0.85)';
+    ctx.strokeStyle = isExhibit ? 'rgba(245, 158, 11, 0.85)' : 'rgba(14, 165, 233, 0.85)';
     ctx.lineWidth = 3.5;
     ctx.stroke();
 
-    // Текст
     ctx.font = 'bold 46px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.fillStyle = '#F8FAFC';
     ctx.textAlign = 'center';
@@ -87,62 +87,48 @@
   }
 
   /**
-   * Чистая навигационная стрелка-шеврон (стиль Google Street View).
-   * БЕЗ кругов, БЕЗ колец, только четкий светящийся шеврон вперед!
+   * Кружок перехода — аккуратный диск со стрелочкой внутри
    */
-  function makeArrowTex() {
-    const key = 'clean_street_chevron_v4';
+  function makeTransitionCircleTex() {
+    const key = 'trans_circle_v1';
     if (_texCache.has(key)) return _texCache.get(key);
 
-    const S = 256;
+    const S = 256, CX = 128, CY = 128;
     const c = document.createElement('canvas');
     c.width = S; c.height = S;
     const ctx = c.getContext('2d');
 
     ctx.clearRect(0, 0, S, S);
 
-    // Тень под шевроном
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-    ctx.shadowBlur = 14;
-    ctx.shadowOffsetY = 6;
-
-    // Контур шеврона (указывает вперед)
+    // Основной голубой круг
     ctx.beginPath();
-    ctx.moveTo(128, 22);   // Острие
-    ctx.lineTo(238, 140);  // Правый угол
-    ctx.lineTo(198, 188);  // Правый низ
-    ctx.lineTo(128, 116);  // Внутренняя выемка
-    ctx.lineTo(58, 188);   // Левый низ
-    ctx.lineTo(18, 140);   // Левый угол
-    ctx.closePath();
-
-    // Градиентная заливка
-    const grad = ctx.createLinearGradient(128, 22, 128, 188);
+    ctx.arc(CX, CY, 118, 0, Math.PI * 2);
+    const grad = ctx.createRadialGradient(CX, CY, 30, CX, CY, 118);
     grad.addColorStop(0, '#38BDF8');
     grad.addColorStop(1, '#0284C7');
     ctx.fillStyle = grad;
     ctx.fill();
 
-    ctx.shadowColor = 'transparent';
-
-    // Четкий белый кант с закруглением
+    // Белый кантик
     ctx.strokeStyle = '#FFFFFF';
-    ctx.lineWidth = 7;
-    ctx.lineJoin = 'round';
+    ctx.lineWidth = 8;
     ctx.stroke();
 
-    // Внутренний блик
+    // Стрелочка перехода внутри кружка
     ctx.beginPath();
-    ctx.moveTo(128, 40);
-    ctx.lineTo(218, 136);
-    ctx.lineTo(194, 168);
-    ctx.lineTo(128, 104);
-    ctx.lineTo(62, 168);
-    ctx.lineTo(38, 136);
+    ctx.moveTo(CX, 54);       // Острие вверху
+    ctx.lineTo(CX + 46, 114); // Правое плечо
+    ctx.lineTo(CX + 20, 114); // Правый вырез
+    ctx.lineTo(CX + 20, 172); // Правый низ
+    ctx.lineTo(CX - 20, 172); // Левый низ
+    ctx.lineTo(CX - 20, 114); // Левый вырез
+    ctx.lineTo(CX - 46, 114); // Левое плечо
     ctx.closePath();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
-    ctx.lineWidth = 3;
-    ctx.stroke();
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowBlur = 8;
+    ctx.fill();
 
     const url = c.toDataURL();
     _texCache.set(key, url);
@@ -178,16 +164,20 @@
       this._frame++;
       if (this._frame % 2 !== 0) return;
 
+      if (activeModalWrap) return;
+
       const cam = this.el.sceneEl.camera;
       if (!cam) return;
       cam.getWorldPosition(this._cp);
 
       for (const m of this.items) {
         if (!m.wrapEl || !m.wrapEl.object3D) continue;
+        if (m.wrapEl.dataset.isModalOpen === 'true') continue;
+
         m.wrapEl.object3D.getWorldPosition(this._ep);
         const d = this._cp.distanceTo(this._ep);
 
-        // 1. Прозрачность 3D элемента по мере удаления
+        // 1. Прозрачность кружка по мере удаления
         let targetMeshOpacity = 1.0;
         if (!m.isHovered) {
           if (d <= m.near) {
@@ -211,7 +201,7 @@
           });
         }
 
-        // 2. Название прямо рядом с элементом
+        // 2. Название прямо над кружком
         let targetLabelOpacity = 0.95;
         if (m.isHovered) {
           targetLabelOpacity = 1.0;
@@ -246,10 +236,19 @@
     closeHTMLModal();
     activeModalWrap = parentWrap;
 
-    const mesh  = parentWrap.querySelector('.marker-mesh');
-    const label = parentWrap.querySelector('.marker-label');
-    if (mesh)  { mesh.setAttribute('visible', 'false'); mesh.classList.remove('clickable'); }
-    if (label) label.setAttribute('visible', 'false');
+    // Скрываем все 3D маркеры, чтобы они НЕ перекрывали окно!
+    const eC = document.getElementById('exhibits-container');
+    const lC = document.getElementById('links-container');
+    if (eC) eC.setAttribute('visible', 'false');
+    if (lC) lC.setAttribute('visible', 'false');
+
+    if (parentWrap) {
+      parentWrap.dataset.isModalOpen = 'true';
+      const mesh  = parentWrap.querySelector('.marker-mesh');
+      const label = parentWrap.querySelector('.marker-label');
+      if (mesh)  { mesh.setAttribute('visible', 'false'); mesh.classList.remove('clickable'); }
+      if (label) { label.setAttribute('visible', 'false'); }
+    }
 
     const overlay = document.getElementById('exhibit-overlay');
     const titleEl = document.getElementById('exhibit-modal-title');
@@ -279,9 +278,18 @@
       overlay.classList.remove('open');
       setTimeout(() => { if (!overlay.classList.contains('open')) overlay.style.display = 'none'; }, 310);
     }
+
+    const eC = document.getElementById('exhibits-container');
+    const lC = document.getElementById('links-container');
+    if (eC) eC.setAttribute('visible', 'true');
+    if (lC) lC.setAttribute('visible', 'true');
+
     if (activeModalWrap) {
-      const mesh = activeModalWrap.querySelector('.marker-mesh');
-      if (mesh) { mesh.setAttribute('visible', 'true'); mesh.classList.add('clickable'); }
+      activeModalWrap.dataset.isModalOpen = 'false';
+      const mesh  = activeModalWrap.querySelector('.marker-mesh');
+      const label = activeModalWrap.querySelector('.marker-label');
+      if (mesh)  { mesh.setAttribute('visible', 'true'); mesh.classList.add('clickable'); }
+      if (label) { label.setAttribute('visible', 'true'); }
       activeModalWrap = null;
     }
   }
@@ -394,58 +402,52 @@
     const prox    = sceneEl && sceneEl.components && sceneEl.components['proximity-manager'];
     if (prox) prox.clear();
 
-    // ── Переходы: ТОЛЬКО ЧИСТАЯ СТРЕЛКА-ШЕВРОН (БЕЗ кругов и колец!) ──
+    // ── 1. ПЕРЕХОД: АККУРАТНЫЙ КРУЖОК (radius 0.14) СО СТРЕЛОЧКОЙ ──
     (room.links || []).forEach(lk => {
       const wrap = document.createElement('a-entity');
       wrap.setAttribute('position', lk.position);
       wrap.setAttribute('look-at', '[camera]');
 
-      // Наклон к полу (-65 градусов: стрелка лежит и указывает вперед)
-      const arrowTilt = document.createElement('a-entity');
-      arrowTilt.setAttribute('rotation', '-65 0 0');
+      const meshWrap = document.createElement('a-entity');
+      meshWrap.classList.add('marker-mesh');
 
-      // Сама стрелка — единственный интерактивный объект
-      const arrow = document.createElement('a-image');
-      arrow.classList.add('clickable', 'marker-mesh');
-      arrow.setAttribute('src', makeArrowTex());
-      arrow.setAttribute('width',  '0.88');
-      arrow.setAttribute('height', '0.88');
-      arrow.setAttribute('position', '0 0 0.02');
-      arrow.setAttribute('material', 'shader:flat; transparent:true; opacity:0.95; depthWrite:false');
-      arrow.setAttribute('animation', 'property:position; dir:alternate; dur:1100; loop:true; to:0 0.08 -0.10; easing:easeInOutSine');
+      const circle = document.createElement('a-circle');
+      circle.classList.add('clickable');
+      circle.setAttribute('radius', '0.14');
+      circle.setAttribute('material', `src:${makeTransitionCircleTex()}; shader:flat; transparent:true; opacity:0.95`);
+      circle.setAttribute('animation', 'property:scale; dir:alternate; dur:1500; loop:true; to:1.24 1.24 1.24; easing:easeInOutSine');
+      meshWrap.appendChild(circle);
 
-      arrowTilt.appendChild(arrow);
-
-      // Название перехода над стрелкой
+      // Название над кружком перехода
       const label = document.createElement('a-image');
       label.classList.add('marker-label');
-      label.setAttribute('src', makeLabelTex(lk.label || 'Перейти', false));
-      label.setAttribute('width', '1.3');
-      label.setAttribute('height', '0.30');
-      label.setAttribute('position', '0 0.52 0');
+      label.setAttribute('src', makeLabelTex(lk.label || 'Перейти во второй зал', false));
+      label.setAttribute('width', '1.25');
+      label.setAttribute('height', '0.28');
+      label.setAttribute('position', '0 0.28 0.02');
       label.setAttribute('material', 'shader:flat; transparent:true; opacity:0.95');
       label.object3D.visible = true;
 
       const go = () => transitionToRoom(lk.target, lk.position);
-      arrow.addEventListener('click', go);
+      circle.addEventListener('click', go);
 
       // Hover
-      const item = prox ? prox.add(wrap, arrowTilt, label, LNK_NEAR, LNK_FAR) : null;
-      arrow.addEventListener('mouseenter', () => {
+      const item = prox ? prox.add(wrap, meshWrap, label, LNK_NEAR, LNK_FAR) : null;
+      circle.addEventListener('mouseenter', () => {
         if (item) item.isHovered = true;
-        arrow.setAttribute('animation__scale', { property: 'scale', to: '1.2 1.2 1.2', dur: 140, easing: 'easeOutBack' });
+        meshWrap.setAttribute('animation__sc', { property: 'scale', to: '1.22 1.22 1.22', dur: 140, easing: 'easeOutBack' });
       });
-      arrow.addEventListener('mouseleave', () => {
+      circle.addEventListener('mouseleave', () => {
         if (item) item.isHovered = false;
-        arrow.setAttribute('animation__scale', { property: 'scale', to: '1 1 1', dur: 140, easing: 'easeOutBack' });
+        meshWrap.setAttribute('animation__sc', { property: 'scale', to: '1 1 1', dur: 140, easing: 'easeOutBack' });
       });
 
-      wrap.appendChild(arrowTilt);
+      wrap.appendChild(meshWrap);
       wrap.appendChild(label);
       lC.appendChild(wrap);
     });
 
-    // ── Экспонаты (аккуратная точка-маркер) ──
+    // ── 2. ЭКСПОНАТ: ТОЧНО ТАКОЙ ЖЕ АККУРАТНЫЙ КРУЖОК (radius 0.14) ──
     (room.exhibits || []).forEach(ex => {
       const wrap = document.createElement('a-entity');
       wrap.setAttribute('position', ex.position);
@@ -467,7 +469,7 @@
       circle.appendChild(dot);
       meshWrap.appendChild(circle);
 
-      // Название над маркером (видно сразу)
+      // Название над кружком экспоната
       const label = document.createElement('a-image');
       label.classList.add('marker-label');
       label.setAttribute('src', makeLabelTex(ex.title, true));
@@ -483,7 +485,7 @@
       circle.addEventListener('mouseenter', () => {
         if (item) item.isHovered = true;
         circle.setAttribute('animation__col', { property: 'material.color', to: '#FCD34D', dur: 150 });
-        meshWrap.setAttribute('animation__sc', { property: 'scale', to: '1.2 1.2 1.2', dur: 150, easing: 'easeOutBack' });
+        meshWrap.setAttribute('animation__sc', { property: 'scale', to: '1.22 1.22 1.22', dur: 150, easing: 'easeOutBack' });
       });
       circle.addEventListener('mouseleave', () => {
         if (item) item.isHovered = false;
