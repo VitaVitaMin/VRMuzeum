@@ -22,6 +22,15 @@
     modeBadge.textContent = isMobile ? '📱 Мобильный (Сенсорный свайп)' : '💻 ПК (Управление мышью)';
   }
 
+  // Немедленная установка названия комнаты из CONFIG при старте страницы
+  const roomTitle = document.getElementById('room-title');
+  if (roomTitle && window.CONFIG && window.CONFIG.rooms) {
+    const startId = window.location.hash.replace('#', '') || window.CONFIG.startRoom || 'room1';
+    if (window.CONFIG.rooms[startId]) {
+      roomTitle.textContent = window.CONFIG.rooms[startId].name || 'Главный зал';
+    }
+  }
+
   const vrBtn = document.getElementById('custom-vr-btn');
   if (vrBtn) {
     // Кнопка VR нужна исключительно на мобильных устройствах под очки Cardboard

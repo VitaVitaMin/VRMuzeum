@@ -1,181 +1,372 @@
-// app-pc.js — Логика для ПК (Управление мышью, Google Maps warp-переходы, Debug-панель)
+// =============================================================================
+// app-pc.js — PC версия:
+//             - Чистые стрелки перехода в стиле Google Street View (БЕЗ кругов и колец)
+//             - Названия сразу видны при первой загрузке
+//             - Плавная прозрачность 3D элементов по мере удаления
+//             - HTML карточка экспоната
+// =============================================================================
 (function () {
   'use strict';
 
-  const ARROW_SVG = "data:image/svg+xml;charset=utf-8,%3Csvg width=%22100%22 height=%22100%22 viewBox=%220 0 100 100%22 fill=%22none%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cpath d=%22M20 70 L 50 30 L 80 70%22 stroke=%22%234ADE80%22 stroke-width=%2212%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E";
+  // ── Константы ────────────────────────────────────────────────────────────
+  const TRANSITION_DUR = 380;   // мс перехода между комнатами
+  const LNK_NEAR       = 3.5;   // м: дистанция четкой видимости стрелки
+  const LNK_FAR        = 8.5;   // м: дистанция полупрозрачности
+  const EX_NEAR        = 3.2;   // м: дистанция четкой видимости экспоната
+  const EX_FAR         = 7.5;   // м: дистанция полупрозрачности
 
+  // ── Состояние ────────────────────────────────────────────────────────────
   let isInitialized = false;
   let activeModalWrap = null;
   let isTransitioning = false;
   let currentRoomId = '';
   let debugActive = false;
+  window.isVRMode = false;
 
-  // ── Вспомогательные утилиты ────────────────────────────────────────────────
+  const _texCache = new Map();
 
-  /**
-   * Копирует текст в буфер обмена.
-   * Сначала пробует современный Clipboard API, затем — fallback через
-   * временный <textarea> (без устаревшего document.execCommand).
-   */
+  // ── Утилита: копирование ─────────────────────────────────────────────────
   function copyToClipboard(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       return navigator.clipboard.writeText(text);
     }
-    // Fallback: временное поле ввода + Selection API (не использует execCommand)
     return new Promise((resolve, reject) => {
       try {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
-        document.body.appendChild(textarea);
-        textarea.focus();
-        textarea.select();
-        const ok = document.execCommand('copy'); // deprecated, but only as last resort
-        document.body.removeChild(textarea);
-        ok ? resolve() : reject(new Error('execCommand returned false'));
-      } catch (err) {
-        reject(err);
-      }
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+        document.body.appendChild(ta);
+        ta.focus(); ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        ok ? resolve() : reject(new Error('execCommand failed'));
+      } catch (e) { reject(e); }
     });
   }
 
-  // Текстура подсказок над маркерами
-  function createTextTexture(text, textColor = '#FFFFFF', isExhibit = false) {
-    const canvas = document.createElement('canvas');
-    canvas.width = 1024;
-    canvas.height = 240;
-    const ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
+  // ── Canvas текстуры ───────────────────────────────────────────────────────
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  /** Аккуратная табличка с названием прямо над элементом */
+  function makeLabelTex(text, isExhibit) {
+    const key = `lbl|${text}|${isExhibit}`;
+    if (_texCache.has(key)) return _texCache.get(key);
 
-    // Фон с закруглёнными углами
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+    const W = 512, H = 110;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const ctx = c.getContext('2d');
+
+    // Полупрозрачный стеклянный фон
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, isExhibit ? 'rgba(15, 10, 2, 0.94)' : 'rgba(3, 14, 24, 0.94)');
+    bg.addColorStop(1, isExhibit ? 'rgba(28, 16, 4, 0.90)' : 'rgba(5, 22, 38, 0.90)');
+    ctx.fillStyle = bg;
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(16, 16, canvas.width - 32, canvas.height - 32, 28);
-    else ctx.rect(16, 16, canvas.width - 32, canvas.height - 32);
+    if (ctx.roundRect) ctx.roundRect(6, 6, W - 12, H - 12, 20);
+    else ctx.rect(6, 6, W - 12, H - 12);
     ctx.fill();
 
-    // Обводка (stroke принадлежит тому же пути — beginPath уже вызван выше)
-    ctx.strokeStyle = isExhibit ? 'rgba(255, 167, 38, 0.8)' : 'rgba(74, 222, 128, 0.8)';
-    ctx.lineWidth = 6;
+    // Неоновая рамка
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(6, 6, W - 12, H - 12, 20);
+    else ctx.rect(6, 6, W - 12, H - 12);
+    ctx.strokeStyle = isExhibit ? 'rgba(245, 158, 11, 0.85)' : 'rgba(56, 189, 248, 0.85)';
+    ctx.lineWidth = 3.5;
     ctx.stroke();
 
     // Текст
-    ctx.font = 'bold 64px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillStyle = textColor;
+    ctx.font = 'bold 46px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#F8FAFC';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+    ctx.fillText(text, W / 2, H / 2 + 1, W - 40);
 
-    return canvas.toDataURL();
+    const url = c.toDataURL();
+    _texCache.set(key, url);
+    return url;
   }
 
-  // ── Переход между комнатами ─────────────────────────────────────────────────
+  /**
+   * Чистая навигационная стрелка-шеврон (стиль Google Street View).
+   * БЕЗ кругов, БЕЗ колец, только четкий светящийся шеврон вперед!
+   */
+  function makeArrowTex() {
+    const key = 'clean_street_chevron_v4';
+    if (_texCache.has(key)) return _texCache.get(key);
 
-  // Плавный пространственный переход в стиле Google Street View (без черных экранов)
-  function transitionToRoom(targetRoomId, targetPositionStr = null) {
-    if (isTransitioning || targetRoomId === currentRoomId) return;
-    const nextRoom = CONFIG.rooms && CONFIG.rooms[targetRoomId];
-    if (!nextRoom) {
-      console.warn(`[Музей ПК] Комната "${targetRoomId}" не найдена в CONFIG.`);
-      return;
+    const S = 256;
+    const c = document.createElement('canvas');
+    c.width = S; c.height = S;
+    const ctx = c.getContext('2d');
+
+    ctx.clearRect(0, 0, S, S);
+
+    // Тень под шевроном
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 14;
+    ctx.shadowOffsetY = 6;
+
+    // Контур шеврона (указывает вперед)
+    ctx.beginPath();
+    ctx.moveTo(128, 22);   // Острие
+    ctx.lineTo(238, 140);  // Правый угол
+    ctx.lineTo(198, 188);  // Правый низ
+    ctx.lineTo(128, 116);  // Внутренняя выемка
+    ctx.lineTo(58, 188);   // Левый низ
+    ctx.lineTo(18, 140);   // Левый угол
+    ctx.closePath();
+
+    // Градиентная заливка
+    const grad = ctx.createLinearGradient(128, 22, 128, 188);
+    grad.addColorStop(0, '#38BDF8');
+    grad.addColorStop(1, '#0284C7');
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    ctx.shadowColor = 'transparent';
+
+    // Четкий белый кант с закруглением
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 7;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    // Внутренний блик
+    ctx.beginPath();
+    ctx.moveTo(128, 40);
+    ctx.lineTo(218, 136);
+    ctx.lineTo(194, 168);
+    ctx.lineTo(128, 104);
+    ctx.lineTo(62, 168);
+    ctx.lineTo(38, 136);
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    const url = c.toDataURL();
+    _texCache.set(key, url);
+    return url;
+  }
+
+  // ==========================================================================
+  // A-Frame компонент: Proximity Manager
+  // ==========================================================================
+  AFRAME.registerComponent('proximity-manager', {
+    init: function () {
+      this.items  = [];
+      this._cp    = new THREE.Vector3();
+      this._ep    = new THREE.Vector3();
+      this._frame = 0;
+    },
+    add: function (wrapEl, meshEl, labelEl, near, far) {
+      const m = {
+        wrapEl,
+        meshEl,
+        labelEl,
+        near: near || 3.0,
+        far: far || 7.5,
+        isHovered: false,
+        labelOpacity: 0.95,
+        meshOpacity: 0.95
+      };
+      this.items.push(m);
+      return m;
+    },
+    clear: function () { this.items = []; },
+    tick: function () {
+      this._frame++;
+      if (this._frame % 2 !== 0) return;
+
+      const cam = this.el.sceneEl.camera;
+      if (!cam) return;
+      cam.getWorldPosition(this._cp);
+
+      for (const m of this.items) {
+        if (!m.wrapEl || !m.wrapEl.object3D) continue;
+        m.wrapEl.object3D.getWorldPosition(this._ep);
+        const d = this._cp.distanceTo(this._ep);
+
+        // 1. Прозрачность 3D элемента по мере удаления
+        let targetMeshOpacity = 1.0;
+        if (!m.isHovered) {
+          if (d <= m.near) {
+            targetMeshOpacity = 1.0;
+          } else if (d >= m.far) {
+            targetMeshOpacity = 0.28;
+          } else {
+            const factor = (d - m.near) / (m.far - m.near);
+            targetMeshOpacity = 1.0 - factor * 0.72;
+          }
+        }
+        m.meshOpacity += (targetMeshOpacity - m.meshOpacity) * 0.16;
+
+        if (m.meshEl && m.meshEl.object3D) {
+          m.meshEl.object3D.traverse(child => {
+            if (child.material) {
+              child.material.transparent = true;
+              child.material.opacity = m.meshOpacity;
+              child.material.needsUpdate = true;
+            }
+          });
+        }
+
+        // 2. Название прямо рядом с элементом
+        let targetLabelOpacity = 0.95;
+        if (m.isHovered) {
+          targetLabelOpacity = 1.0;
+        } else if (d <= m.near) {
+          targetLabelOpacity = 0.95;
+        } else if (d >= m.far) {
+          targetLabelOpacity = 0;
+        } else {
+          const factor = (d - m.near) / (m.far - m.near);
+          targetLabelOpacity = (1.0 - factor) * 0.95;
+        }
+        m.labelOpacity += (targetLabelOpacity - m.labelOpacity) * 0.18;
+
+        if (m.labelEl && m.labelEl.object3D) {
+          m.labelEl.object3D.traverse(child => {
+            if (child.material) {
+              child.material.transparent = true;
+              child.material.opacity = m.labelOpacity;
+              child.material.needsUpdate = true;
+            }
+          });
+          m.labelEl.object3D.visible = m.labelOpacity > 0.02;
+        }
+      }
     }
+  });
+
+  // ==========================================================================
+  // HTML карточка экспоната
+  // ==========================================================================
+  function showHTMLModal(exhibit, parentWrap) {
+    closeHTMLModal();
+    activeModalWrap = parentWrap;
+
+    const mesh  = parentWrap.querySelector('.marker-mesh');
+    const label = parentWrap.querySelector('.marker-label');
+    if (mesh)  { mesh.setAttribute('visible', 'false'); mesh.classList.remove('clickable'); }
+    if (label) label.setAttribute('visible', 'false');
+
+    const overlay = document.getElementById('exhibit-overlay');
+    const titleEl = document.getElementById('exhibit-modal-title');
+    const descEl  = document.getElementById('exhibit-desc');
+    const imgEl   = document.getElementById('exhibit-img');
+    const imgWrap = document.getElementById('exhibit-img-wrap');
+
+    if (titleEl) titleEl.textContent = exhibit.title || 'Экспонат';
+    if (descEl)  descEl.textContent  = (exhibit.description || '').replace(/<[^>]*>/gm, '');
+
+    if (exhibit.image && imgWrap) {
+      imgEl.src = exhibit.image;
+      imgWrap.style.display = '';
+    } else if (imgWrap) {
+      imgWrap.style.display = 'none';
+    }
+
+    if (overlay) {
+      overlay.style.display = 'flex';
+      requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('open')));
+    }
+  }
+
+  function closeHTMLModal() {
+    const overlay = document.getElementById('exhibit-overlay');
+    if (overlay) {
+      overlay.classList.remove('open');
+      setTimeout(() => { if (!overlay.classList.contains('open')) overlay.style.display = 'none'; }, 310);
+    }
+    if (activeModalWrap) {
+      const mesh = activeModalWrap.querySelector('.marker-mesh');
+      if (mesh) { mesh.setAttribute('visible', 'true'); mesh.classList.add('clickable'); }
+      activeModalWrap = null;
+    }
+  }
+
+  // ==========================================================================
+  // Переход между комнатами
+  // ==========================================================================
+  function transitionToRoom(targetId, linkPosStr) {
+    if (isTransitioning || targetId === currentRoomId) return;
+    const next = CONFIG.rooms && CONFIG.rooms[targetId];
+    if (!next) { console.warn('[Музей] Комната не найдена:', targetId); return; }
 
     isTransitioning = true;
-    closeModal3D();
+    closeHTMLModal();
 
     const sceneEl = document.getElementById('museum-scene');
-    const skyCurrent = document.getElementById('sky-pano');
-    const skyIncoming = document.getElementById('sky-pano-incoming');
-    const cameraRig = document.getElementById('camera-rig');
+    const skyCur  = document.getElementById('sky-pano');
+    const skyInc  = document.getElementById('sky-pano-incoming');
+    const camRig  = document.getElementById('camera-rig');
 
-    // Определяем вектор движения к целевой точке перехода
-    let moveDir = new THREE.Vector3(0, 0, -2);
-    if (targetPositionStr) {
-      const parts = targetPositionStr.trim().split(/\s+/).map(Number);
-      if (parts.length === 3 && !parts.some(isNaN)) {
-        moveDir.set(parts[0], parts[1], parts[2]).normalize().multiplyScalar(2.4);
-      }
+    let dir = new THREE.Vector3(0, 0, -2.2);
+    if (linkPosStr) {
+      const p = linkPosStr.trim().split(/\s+/).map(Number);
+      if (p.length === 3 && !p.some(isNaN)) dir.set(p[0], p[1], p[2]).normalize().multiplyScalar(2.2);
     }
 
-    // Предзагрузка следующей панорамы на второй купол
-    if (skyIncoming) {
-      skyIncoming.setAttribute('src', nextRoom.panorama);
-      skyIncoming.setAttribute('visible', 'true');
-      skyIncoming.setAttribute('material', 'opacity: 0; transparent: true; shader: flat; color: #FFFFFF');
+    if (skyInc) {
+      skyInc.setAttribute('src', next.panorama);
+      skyInc.setAttribute('visible', 'true');
+      skyInc.setAttribute('material', 'opacity:0; transparent:true; shader:flat; color:#FFFFFF');
     }
 
-    // Включаем эффект субпиксельного смаза движения (Google Maps Street View Warp)
     if (sceneEl) sceneEl.classList.add('street-warp-active');
 
-    // Анимация движения камеры вперед к маркеру
-    if (cameraRig) {
-      cameraRig.setAttribute('animation__warp', {
-        property: 'position',
-        to: `${moveDir.x} ${moveDir.y} ${moveDir.z}`,
-        dur: 480,
-        easing: 'easeInQuad'
+    if (camRig) {
+      camRig.setAttribute('animation__mv', {
+        property: 'position', to: `${dir.x} ${dir.y} ${dir.z}`,
+        dur: TRANSITION_DUR, easing: 'easeInQuad'
+      });
+    }
+    if (skyCur) {
+      skyCur.setAttribute('animation__fo', {
+        property: 'material.opacity', from: 1, to: 0,
+        dur: TRANSITION_DUR, easing: 'easeInQuad'
+      });
+    }
+    if (skyInc) {
+      skyInc.setAttribute('animation__fi', {
+        property: 'material.opacity', from: 0, to: 1,
+        dur: TRANSITION_DUR, easing: 'easeInQuad'
       });
     }
 
-    // Перекрестное смешивание панорам без затемнения
-    if (skyCurrent) {
-      skyCurrent.setAttribute('animation__fadeout', {
-        property: 'material.opacity',
-        from: 1,
-        to: 0,
-        dur: 480,
-        easing: 'easeInQuad'
-      });
+    const titleEl = document.getElementById('room-title');
+    if (titleEl) {
+      titleEl.classList.add('fading');
+      setTimeout(() => {
+        titleEl.textContent = next.name || 'Зал музея';
+        titleEl.classList.remove('fading');
+      }, TRANSITION_DUR / 2);
     }
 
-    if (skyIncoming) {
-      skyIncoming.setAttribute('animation__fadein', {
-        property: 'material.opacity',
-        from: 0,
-        to: 1,
-        dur: 480,
-        easing: 'easeInQuad'
-      });
-    }
-
-    // Завершение перехода — задержка чуть больше длительности анимации (480 мс)
-    // чтобы анимация успела завершиться до переключения src
     setTimeout(() => {
-      // Сбрасываем анимации и обновляем базовый купол
-      if (skyCurrent) {
-        skyCurrent.removeAttribute('animation__fadeout');
-        skyCurrent.setAttribute('src', nextRoom.panorama);
-        skyCurrent.setAttribute('material', 'opacity: 1; transparent: true; shader: flat; color: #FFFFFF');
+      if (skyCur) {
+        skyCur.removeAttribute('animation__fo');
+        skyCur.setAttribute('src', next.panorama);
+        skyCur.setAttribute('material', 'opacity:1; transparent:true; shader:flat; color:#FFFFFF');
       }
-
-      // Скрываем входящий купол
-      if (skyIncoming) {
-        skyIncoming.removeAttribute('animation__fadein');
-        skyIncoming.setAttribute('visible', 'false');
-        skyIncoming.setAttribute('src', '');
-        skyIncoming.setAttribute('material', 'opacity: 0; shader: flat; color: #FFFFFF');
+      if (skyInc) {
+        skyInc.removeAttribute('animation__fi');
+        skyInc.setAttribute('visible', 'false');
+        skyInc.setAttribute('src', '');
+        skyInc.setAttribute('material', 'opacity:0; shader:flat; color:#FFFFFF');
       }
-
-      // Возвращаем камеру в центр новой комнаты
-      if (cameraRig) {
-        cameraRig.removeAttribute('animation__warp');
-        cameraRig.setAttribute('position', '0 0 0');
-      }
-
+      if (camRig) { camRig.removeAttribute('animation__mv'); camRig.setAttribute('position', '0 0 0'); }
       if (sceneEl) sceneEl.classList.remove('street-warp-active');
 
-      // Отрисовываем объекты новой комнаты
-      renderRoomContent(targetRoomId);
+      renderRoomContent(targetId);
       isTransitioning = false;
-    }, 520); // 520 мс > 480 мс анимации — гарантирует завершение fade
+    }, TRANSITION_DUR + 45);
   }
 
-  // ── Рендеринг маркеров ──────────────────────────────────────────────────────
-
-  // Отрисовка маркеров и переходов в комнате
+  // ==========================================================================
+  // Рендеринг содержимого комнаты (PC)
+  // ==========================================================================
   function renderRoomContent(roomId) {
     currentRoomId = roomId;
     const room = CONFIG.rooms && CONFIG.rooms[roomId];
@@ -183,415 +374,223 @@
 
     window.history.replaceState(null, null, '#' + roomId);
 
-    const roomTitle = document.getElementById('room-title');
-    if (roomTitle) roomTitle.textContent = room.name || 'Зал музея';
-
-    const debugRoomField = document.getElementById('debug-current-room');
-    if (debugRoomField) debugRoomField.textContent = roomId;
-
-    const debugRoomSelect = document.getElementById('debug-room-select');
-    if (debugRoomSelect && debugRoomSelect.value !== roomId) {
-      debugRoomSelect.value = roomId;
+    const titleEl = document.getElementById('room-title');
+    if (titleEl) {
+      titleEl.textContent = room.name || 'Зал музея';
+      titleEl.classList.remove('fading');
     }
 
-    const linksContainer = document.getElementById('links-container');
-    const exhibitsContainer = document.getElementById('exhibits-container');
+    const dbRoom = document.getElementById('debug-current-room');
+    if (dbRoom) dbRoom.textContent = roomId;
+    const dbSel = document.getElementById('debug-room-select');
+    if (dbSel && dbSel.value !== roomId) dbSel.value = roomId;
 
-    if (linksContainer) linksContainer.innerHTML = '';
-    if (exhibitsContainer) exhibitsContainer.innerHTML = '';
+    const lC = document.getElementById('links-container');
+    const eC = document.getElementById('exhibits-container');
+    if (lC) lC.innerHTML = '';
+    if (eC) eC.innerHTML = '';
 
-    // Переходы (Links)
-    if (Array.isArray(room.links)) {
-      room.links.forEach(lk => {
-        const wrap = document.createElement('a-entity');
-        wrap.setAttribute('position', lk.position);
-        wrap.setAttribute('look-at', '[camera]');
+    const sceneEl = document.getElementById('museum-scene');
+    const prox    = sceneEl && sceneEl.components && sceneEl.components['proximity-manager'];
+    if (prox) prox.clear();
 
-        const marker = document.createElement('a-image');
-        marker.classList.add('clickable');
-        marker.setAttribute('src', ARROW_SVG);
-        marker.setAttribute('scale', '0.55 0.55 0.55');
-        marker.setAttribute('material', 'color: #FFFFFF; shader: flat; transparent: true; opacity: 0.95');
-        marker.setAttribute('animation', 'property: position; dir: alternate; dur: 900; loop: true; to: 0 0.12 0; easing: easeInOutSine');
+    // ── Переходы: ТОЛЬКО ЧИСТАЯ СТРЕЛКА-ШЕВРОН (БЕЗ кругов и колец!) ──
+    (room.links || []).forEach(lk => {
+      const wrap = document.createElement('a-entity');
+      wrap.setAttribute('position', lk.position);
+      wrap.setAttribute('look-at', '[camera]');
 
-        const label = document.createElement('a-image');
-        label.classList.add('marker-label');
-        label.setAttribute('src', createTextTexture(lk.label || 'Перейти', '#4ADE80', false));
-        label.setAttribute('position', '0 0.5 0');
-        label.setAttribute('scale', '1.6 0.38 1');
-        label.setAttribute('visible', 'false');
+      // Наклон к полу (-65 градусов: стрелка лежит и указывает вперед)
+      const arrowTilt = document.createElement('a-entity');
+      arrowTilt.setAttribute('rotation', '-65 0 0');
 
-        marker.addEventListener('mouseenter', () => {
-          label.setAttribute('visible', 'true');
-          marker.setAttribute('scale', '0.65 0.65 0.65');
-        });
-        marker.addEventListener('mouseleave', () => {
-          label.setAttribute('visible', 'false');
-          marker.setAttribute('scale', '0.55 0.55 0.55');
-        });
+      // Сама стрелка — единственный интерактивный объект
+      const arrow = document.createElement('a-image');
+      arrow.classList.add('clickable', 'marker-mesh');
+      arrow.setAttribute('src', makeArrowTex());
+      arrow.setAttribute('width',  '0.88');
+      arrow.setAttribute('height', '0.88');
+      arrow.setAttribute('position', '0 0 0.02');
+      arrow.setAttribute('material', 'shader:flat; transparent:true; opacity:0.95; depthWrite:false');
+      arrow.setAttribute('animation', 'property:position; dir:alternate; dur:1100; loop:true; to:0 0.08 -0.10; easing:easeInOutSine');
 
-        marker.addEventListener('click', () => {
-          transitionToRoom(lk.target, lk.position);
-        });
+      arrowTilt.appendChild(arrow);
 
-        wrap.appendChild(marker);
-        wrap.appendChild(label);
-        linksContainer.appendChild(wrap);
+      // Название перехода над стрелкой
+      const label = document.createElement('a-image');
+      label.classList.add('marker-label');
+      label.setAttribute('src', makeLabelTex(lk.label || 'Перейти', false));
+      label.setAttribute('width', '1.3');
+      label.setAttribute('height', '0.30');
+      label.setAttribute('position', '0 0.52 0');
+      label.setAttribute('material', 'shader:flat; transparent:true; opacity:0.95');
+      label.object3D.visible = true;
+
+      const go = () => transitionToRoom(lk.target, lk.position);
+      arrow.addEventListener('click', go);
+
+      // Hover
+      const item = prox ? prox.add(wrap, arrowTilt, label, LNK_NEAR, LNK_FAR) : null;
+      arrow.addEventListener('mouseenter', () => {
+        if (item) item.isHovered = true;
+        arrow.setAttribute('animation__scale', { property: 'scale', to: '1.2 1.2 1.2', dur: 140, easing: 'easeOutBack' });
       });
-    }
-
-    // Экспонаты (Exhibits)
-    if (Array.isArray(room.exhibits)) {
-      room.exhibits.forEach(ex => {
-        const wrap = document.createElement('a-entity');
-        wrap.setAttribute('position', ex.position);
-        wrap.setAttribute('look-at', '[camera]');
-
-        const marker = document.createElement('a-circle');
-        marker.classList.add('clickable', 'marker-mesh');
-        marker.setAttribute('radius', '0.1');
-        marker.setAttribute('material', 'color: #FFA726; shader: flat; transparent: true; opacity: 0.9');
-        marker.setAttribute('animation', 'property: scale; dir: alternate; dur: 1000; loop: true; to: 1.2 1.2 1.2; easing: easeInOutSine');
-
-        const innerDot = document.createElement('a-circle');
-        innerDot.setAttribute('radius', '0.04');
-        innerDot.setAttribute('position', '0 0 0.01');
-        innerDot.setAttribute('material', 'color: #FFFFFF; shader: flat');
-        marker.appendChild(innerDot);
-
-        const label = document.createElement('a-image');
-        label.classList.add('marker-label');
-        label.setAttribute('src', createTextTexture(ex.title, '#FFFFFF', true));
-        label.setAttribute('position', '0 0.38 0');
-        label.setAttribute('scale', '1.6 0.38 1');
-        label.setAttribute('visible', 'false');
-
-        marker.addEventListener('mouseenter', () => {
-          label.setAttribute('visible', 'true');
-        });
-        marker.addEventListener('mouseleave', () => {
-          label.setAttribute('visible', 'false');
-        });
-
-        marker.addEventListener('click', () => {
-          showModal3D(ex, wrap);
-        });
-
-        wrap.appendChild(marker);
-        wrap.appendChild(label);
-        exhibitsContainer.appendChild(wrap);
+      arrow.addEventListener('mouseleave', () => {
+        if (item) item.isHovered = false;
+        arrow.setAttribute('animation__scale', { property: 'scale', to: '1 1 1', dur: 140, easing: 'easeOutBack' });
       });
-    }
+
+      wrap.appendChild(arrowTilt);
+      wrap.appendChild(label);
+      lC.appendChild(wrap);
+    });
+
+    // ── Экспонаты (аккуратная точка-маркер) ──
+    (room.exhibits || []).forEach(ex => {
+      const wrap = document.createElement('a-entity');
+      wrap.setAttribute('position', ex.position);
+      wrap.setAttribute('look-at', '[camera]');
+
+      const meshWrap = document.createElement('a-entity');
+      meshWrap.classList.add('marker-mesh');
+
+      const circle = document.createElement('a-circle');
+      circle.classList.add('clickable');
+      circle.setAttribute('radius', '0.14');
+      circle.setAttribute('material', 'color:#F59E0B; shader:flat; transparent:true; opacity:0.95');
+      circle.setAttribute('animation', 'property:scale; dir:alternate; dur:1500; loop:true; to:1.24 1.24 1.24; easing:easeInOutSine');
+
+      const dot = document.createElement('a-circle');
+      dot.setAttribute('radius', '0.055');
+      dot.setAttribute('position', '0 0 0.01');
+      dot.setAttribute('material', 'color:#FFFFFF; shader:flat');
+      circle.appendChild(dot);
+      meshWrap.appendChild(circle);
+
+      // Название над маркером (видно сразу)
+      const label = document.createElement('a-image');
+      label.classList.add('marker-label');
+      label.setAttribute('src', makeLabelTex(ex.title, true));
+      label.setAttribute('width', '1.25');
+      label.setAttribute('height', '0.28');
+      label.setAttribute('position', '0 0.28 0.02');
+      label.setAttribute('material', 'shader:flat; transparent:true; opacity:0.95');
+      label.object3D.visible = true;
+
+      circle.addEventListener('click', () => showHTMLModal(ex, wrap));
+
+      const item = prox ? prox.add(wrap, meshWrap, label, EX_NEAR, EX_FAR) : null;
+      circle.addEventListener('mouseenter', () => {
+        if (item) item.isHovered = true;
+        circle.setAttribute('animation__col', { property: 'material.color', to: '#FCD34D', dur: 150 });
+        meshWrap.setAttribute('animation__sc', { property: 'scale', to: '1.2 1.2 1.2', dur: 150, easing: 'easeOutBack' });
+      });
+      circle.addEventListener('mouseleave', () => {
+        if (item) item.isHovered = false;
+        circle.setAttribute('animation__col', { property: 'material.color', to: '#F59E0B', dur: 150 });
+        meshWrap.setAttribute('animation__sc', { property: 'scale', to: '1 1 1', dur: 150, easing: 'easeOutBack' });
+      });
+
+      wrap.appendChild(meshWrap);
+      wrap.appendChild(label);
+      eC.appendChild(wrap);
+    });
+
+    hideLoadingScreen();
   }
 
-  // ── 3D Карточка экспоната ───────────────────────────────────────────────────
+  // ==========================================================================
+  // Debug панель (PC)
+  // ==========================================================================
+  function setupDebug() {
+    const toggleBtn = document.getElementById('debug-toggle-btn');
+    const panel     = document.getElementById('debug-panel');
+    const closeBtn  = document.getElementById('debug-close-btn');
+    const coordVal  = document.getElementById('debug-coord-val');
+    const copyBtn   = document.getElementById('debug-copy-coords-btn');
+    const roomSel   = document.getElementById('debug-room-select');
+    const fpsEl     = document.getElementById('debug-fps-val');
+    const anglesEl  = document.getElementById('debug-angles-val');
+    const deviceEl  = document.getElementById('debug-device-val');
+    const resetBtn  = document.getElementById('debug-reset-cam-btn');
+    const vrTestBtn = document.getElementById('debug-test-vr-btn');
 
-  function showModal3D(exhibit, parentWrap) {
-    closeModal3D();
-    activeModalWrap = parentWrap;
-
-    const modalContainer = document.getElementById('modal-container');
-    if (!modalContainer) return;
-
-    const markerMesh = parentWrap.querySelector('.marker-mesh');
-    const label = parentWrap.querySelector('.marker-label');
-    if (markerMesh) {
-      markerMesh.setAttribute('visible', 'false');
-      markerMesh.classList.remove('clickable');
-    }
-    if (label) label.setAttribute('visible', 'false');
-
-    const modal = document.createElement('a-entity');
-    const pos = parentWrap.getAttribute('position');
-    modal.setAttribute('position', pos);
-    modal.setAttribute('look-at', '[camera]');
-    modal.setAttribute('scale', '0.01 0.01 0.01');
-    modal.setAttribute('animation', 'property: scale; to: 1 1 1; dur: 350; easing: easeOutCubic');
-
-    const planeWidth = 2.8;
-    const planeHeight = exhibit.image ? 2.8 : 1.5;
-
-    const modalPlane = document.createElement('a-plane');
-    modalPlane.setAttribute('width', planeWidth);
-    modalPlane.setAttribute('height', planeHeight);
-    modalPlane.setAttribute('material', 'color: #FFFFFF; shader: flat; transparent: true; opacity: 1');
-
-    // Кнопка закрытия [X]
-    const closeBtn = document.createElement('a-circle');
-    closeBtn.classList.add('clickable');
-    closeBtn.setAttribute('radius', '0.14');
-    closeBtn.setAttribute('material', 'color: #EF4444; shader: flat');
-    closeBtn.setAttribute('position', `${planeWidth / 2 - 0.08} ${planeHeight / 2 - 0.08} 0.05`);
-
-    const closeText = document.createElement('a-text');
-    closeText.setAttribute('value', '✕');
-    closeText.setAttribute('align', 'center');
-    closeText.setAttribute('position', '0 0 0.01');
-    closeText.setAttribute('color', '#FFFFFF');
-
-    closeBtn.appendChild(closeText);
-    closeBtn.addEventListener('click', closeModal3D);
-
-    modal.appendChild(modalPlane);
-    modal.appendChild(closeBtn);
-    modalContainer.appendChild(modal);
-
-    const canvas = document.createElement('canvas');
-    canvas.width = 2048;
-    canvas.height = exhibit.image ? 2048 : 1100;
-    const ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-
-    const renderCard = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Фон карточки
-      ctx.fillStyle = '#161925';
-      ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(0, 0, canvas.width, canvas.height, 48);
-      else ctx.rect(0, 0, canvas.width, canvas.height);
-      ctx.fill();
-
-      // Граница карточки (отдельный путь после fill)
-      ctx.strokeStyle = '#2A3048';
-      ctx.lineWidth = 8;
-      ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(0, 0, canvas.width, canvas.height, 48);
-      else ctx.rect(0, 0, canvas.width, canvas.height);
-      ctx.stroke();
-
-      // Верхняя цветная полоска (поверх границы)
-      ctx.fillStyle = '#FFA726';
-      ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(0, 0, canvas.width, 16, [48, 48, 0, 0]);
-      else ctx.rect(0, 0, canvas.width, 16);
-      ctx.fill();
-
-      const contentStartY = exhibit.image ? 1040 : 180;
-
-      ctx.font = 'bold 44px sans-serif';
-      ctx.fillStyle = '#FFA726';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'alphabetic';
-      ctx.fillText('🏛  ЭКСПОНАТ МУЗЕЯ', 100, contentStartY);
-
-      ctx.font = 'bold 92px sans-serif';
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillText(exhibit.title || 'Без названия', 100, contentStartY + 110);
-
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.moveTo(100, contentStartY + 150);
-      ctx.lineTo(canvas.width - 100, contentStartY + 150);
-      ctx.stroke();
-
-      ctx.font = '54px sans-serif';
-      ctx.fillStyle = '#E2E8F0';
-      // Убираем HTML-теги из описания
-      const rawText = (exhibit.description || '').replace(/<[^>]*>?/gm, '');
-      const words = rawText.split(' ');
-      let line = '';
-      let textY = contentStartY + 240;
-      const maxWidth = canvas.width - 200;
-
-      for (let i = 0; i < words.length; i++) {
-        const testLine = line + words[i] + ' ';
-        if (ctx.measureText(testLine).width > maxWidth && i > 0) {
-          ctx.fillText(line.trimEnd(), 100, textY);
-          line = words[i] + ' ';
-          textY += 76;
-        } else {
-          line = testLine;
-        }
-      }
-      if (line.trim()) ctx.fillText(line.trimEnd(), 100, textY);
-
-      modalPlane.setAttribute('src', canvas.toDataURL());
-    };
-
-    if (exhibit.image) {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        // 1. Сначала рисуем карточку (фон, текст и т.д.)
-        renderCard();
-
-        // 2. Поверх вставляем фотографию в верхнюю часть карточки
-        const targetW = canvas.width;
-        const targetH = 920;
-        const scale = Math.max(targetW / img.width, targetH / img.height);
-        const drawW = img.width * scale;
-        const drawH = img.height * scale;
-        const drawX = (targetW - drawW) / 2;
-        const drawY = (targetH - drawH) / 2;
-
-        ctx.save();
-        ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(0, 0, targetW, targetH, [48, 48, 0, 0]);
-        else ctx.rect(0, 0, targetW, targetH);
-        ctx.clip();
-        ctx.drawImage(img, drawX, drawY, drawW, drawH);
-        ctx.restore();
-
-        // 3. Восстанавливаем верхнюю полоску, перекрытую изображением
-        ctx.fillStyle = '#FFA726';
-        ctx.fillRect(0, 0, targetW, 16);
-
-        modalPlane.setAttribute('src', canvas.toDataURL());
-      };
-      img.onerror = () => {
-        // Если картинка не загрузилась — показываем карточку без фото
-        renderCard();
-      };
-      img.src = exhibit.image;
-    } else {
-      renderCard();
-    }
-  }
-
-  function closeModal3D() {
-    const modalContainer = document.getElementById('modal-container');
-    if (modalContainer) modalContainer.innerHTML = '';
-
-    if (activeModalWrap) {
-      const markerMesh = activeModalWrap.querySelector('.marker-mesh');
-      if (markerMesh) {
-        markerMesh.setAttribute('visible', 'true');
-        markerMesh.classList.add('clickable');
-      }
-      activeModalWrap = null;
-    }
-  }
-
-  // ── Debug-панель ────────────────────────────────────────────────────────────
-
-  function setupDebugSystem() {
-    const debugBtn    = document.getElementById('debug-toggle-btn');
-    const debugPanel  = document.getElementById('debug-panel');
-    const closeBtn    = document.getElementById('debug-close-btn');
-    const coordVal    = document.getElementById('debug-coord-val');
-    const copyBtn     = document.getElementById('debug-copy-coords-btn');
-    const roomSelect  = document.getElementById('debug-room-select');
-    const fpsVal      = document.getElementById('debug-fps-val');
-    const anglesVal   = document.getElementById('debug-angles-val');
-    const deviceVal   = document.getElementById('debug-device-val');
-    const resetCamBtn = document.getElementById('debug-reset-cam-btn');
-    const testVrBtn   = document.getElementById('debug-test-vr-btn');
-
-    if (deviceVal) {
-      deviceVal.textContent = `ПК (${window.innerWidth}×${window.innerHeight}, DPR ${window.devicePixelRatio.toFixed(1)})`;
+    if (deviceEl) {
+      deviceEl.textContent = `🖥 ${window.innerWidth}×${window.innerHeight} DPR${window.devicePixelRatio.toFixed(1)}`;
     }
 
-    // Заполняем список комнат для быстрого перехода
-    if (roomSelect && CONFIG.rooms) {
-      roomSelect.innerHTML = '';
-      Object.keys(CONFIG.rooms).forEach(rId => {
-        const opt = document.createElement('option');
-        opt.value = rId;
-        opt.textContent = `${CONFIG.rooms[rId].name || rId} [${rId}]`;
-        roomSelect.appendChild(opt);
+    if (roomSel && CONFIG.rooms) {
+      roomSel.innerHTML = '';
+      Object.keys(CONFIG.rooms).forEach(id => {
+        const o = document.createElement('option');
+        o.value = id; o.textContent = `${CONFIG.rooms[id].name || id} [${id}]`;
+        roomSel.appendChild(o);
       });
-
-      roomSelect.addEventListener('change', () => {
-        transitionToRoom(roomSelect.value);
-      });
+      roomSel.addEventListener('change', () => transitionToRoom(roomSel.value));
     }
 
-    // Открытие / закрытие панели
-    const toggleDebug = () => {
+    const toggle = () => {
       debugActive = !debugActive;
-      if (debugPanel) debugPanel.style.display = debugActive ? 'block' : 'none';
+      if (panel) panel.style.display = debugActive ? 'block' : 'none';
     };
+    if (toggleBtn) toggleBtn.addEventListener('click', toggle);
+    if (closeBtn)  closeBtn.addEventListener('click', toggle);
 
-    if (debugBtn) debugBtn.addEventListener('click', toggleDebug);
-    if (closeBtn) closeBtn.addEventListener('click', toggleDebug);
+    window.addEventListener('keydown', e => {
+      if (e.key === '`' || e.key === 'ё' || e.key === 'Dead') toggle();
+      if (e.key === 'Escape') closeHTMLModal();
+    });
 
-    // Копирование координат точки взгляда для config.js
     if (copyBtn && coordVal) {
       copyBtn.addEventListener('click', () => {
-        const textToCopy = coordVal.textContent.trim();
-        copyToClipboard(textToCopy)
-          .then(() => {
-            copyBtn.classList.add('copied');
-            copyBtn.textContent = '✅ Скопировано в буфер!';
-            setTimeout(() => {
-              copyBtn.classList.remove('copied');
-              copyBtn.textContent = '📋 Скопировать для config.js';
-            }, 1800);
-          })
-          .catch(() => {
-            copyBtn.textContent = '⚠️ Скопируйте вручную';
-            setTimeout(() => {
-              copyBtn.textContent = '📋 Скопировать для config.js';
-            }, 2000);
-          });
+        copyToClipboard(coordVal.textContent.trim())
+          .then(() => { copyBtn.textContent = '✅ Скопировано!'; copyBtn.classList.add('copied'); setTimeout(() => { copyBtn.textContent = '📋 Скопировать для config.js'; copyBtn.classList.remove('copied'); }, 1800); })
+          .catch(() => { copyBtn.textContent = '⚠️ Скопируйте вручную'; setTimeout(() => { copyBtn.textContent = '📋 Скопировать для config.js'; }, 2000); });
       });
     }
 
-    // Сброс камеры
-    if (resetCamBtn) {
-      resetCamBtn.addEventListener('click', () => {
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
         const cam = document.getElementById('main-camera');
         if (cam) cam.setAttribute('rotation', '0 0 0');
       });
     }
-
-    // Тест VR в окне
-    if (testVrBtn) {
-      testVrBtn.addEventListener('click', () => {
-        const scene = document.getElementById('museum-scene');
-        if (scene) {
-          if (scene.is('vr-mode')) scene.exitVR();
-          else scene.enterVR();
-        }
+    if (vrTestBtn) {
+      vrTestBtn.addEventListener('click', () => {
+        const s = document.getElementById('museum-scene');
+        if (s) { if (s.is('vr-mode')) s.exitVR(); else s.enterVR(); }
       });
     }
 
-    // Регистрация компонента отслеживания для Debug (FPS, углы, координаты)
-    let frameCount = 0;
-    let lastTime = performance.now();
-
+    let fc = 0, lt = performance.now();
     AFRAME.registerComponent('pc-debug-tracker', {
       init: function () {
-        this.dir = new THREE.Vector3();
-        this.pos = new THREE.Vector3();
-        this.rot = new THREE.Euler();
+        this._dir = new THREE.Vector3();
+        this._pos = new THREE.Vector3();
+        this._rot = new THREE.Euler();
       },
       tick: function () {
-        frameCount++;
+        fc++;
         const now = performance.now();
-        if (now - lastTime >= 500) {
-          const currentFps = Math.round((frameCount * 1000) / (now - lastTime));
-          frameCount = 0;
-          lastTime = now;
-          if (debugActive && fpsVal) fpsVal.textContent = `${currentFps} FPS`;
+        if (now - lt >= 500) {
+          const fps = Math.round((fc * 1000) / (now - lt));
+          fc = 0; lt = now;
+          if (debugActive && fpsEl) fpsEl.textContent = `${fps} FPS`;
         }
-
         if (!debugActive) return;
 
-        const camera = this.el.sceneEl && this.el.sceneEl.camera;
-        if (!camera) return;
-
-        // ✅ Исправлено: getWorldDirection возвращает вектор ВПЕРЁД (в Three.js
-        // для камеры это -Z в локальных координатах, но уже преобразованный в мировые).
-        // Умножаем на +3, чтобы получить точку впереди игрока на расстоянии 3 м.
-        camera.getWorldDirection(this.dir);
-        this.dir.multiplyScalar(3.0);
-        camera.getWorldPosition(this.pos);
-        this.pos.add(this.dir);
-
+        const cam = this.el.sceneEl && this.el.sceneEl.camera;
+        if (!cam) return;
+        cam.getWorldDirection(this._dir);
+        this._dir.multiplyScalar(3.0);
+        cam.getWorldPosition(this._pos);
+        this._pos.add(this._dir);
         if (coordVal) {
-          coordVal.textContent = `${this.pos.x.toFixed(2)} ${this.pos.y.toFixed(2)} ${this.pos.z.toFixed(2)}`;
+          coordVal.textContent = `${this._pos.x.toFixed(2)} ${this._pos.y.toFixed(2)} ${this._pos.z.toFixed(2)}`;
         }
-
-        // Углы поворота
-        if (anglesVal) {
-          this.rot.setFromRotationMatrix(camera.matrixWorld, 'YXZ');
-          const yaw   = Math.round(THREE.MathUtils.radToDeg(this.rot.y));
-          const pitch = Math.round(THREE.MathUtils.radToDeg(this.rot.x));
-          anglesVal.textContent = `Y: ${yaw}° / P: ${pitch}°`;
+        if (anglesEl) {
+          this._rot.setFromRotationMatrix(cam.matrixWorld, 'YXZ');
+          anglesEl.textContent = `Y:${Math.round(THREE.MathUtils.radToDeg(this._rot.y))}° P:${Math.round(THREE.MathUtils.radToDeg(this._rot.x))}°`;
         }
       }
     });
@@ -600,54 +599,70 @@
     if (sceneEl) sceneEl.setAttribute('pc-debug-tracker', '');
   }
 
-  // ── Инициализация ПК ────────────────────────────────────────────────────────
+  // ==========================================================================
+  // Скрыть загрузочный экран
+  // ==========================================================================
+  let _loadingGone = false;
+  function hideLoadingScreen() {
+    if (_loadingGone) return;
+    _loadingGone = true;
+    const ls = document.getElementById('loading-screen');
+    if (!ls) return;
+    ls.classList.add('hidden');
+    setTimeout(() => ls.remove(), 620);
+  }
 
+  // ==========================================================================
+  // Инициализация ПК
+  // ==========================================================================
   function initPC() {
     if (isInitialized) return;
     isInitialized = true;
+    console.log('[Музей] ПК версия инициализирована');
 
-    console.log('[Музей ПК] Запуск версии для ПК с плавными переходами и панелью Debug...');
+    document.body.classList.add('is-pc');
+
+    const sceneEl = document.getElementById('museum-scene');
+    if (sceneEl) sceneEl.setAttribute('proximity-manager', '');
 
     const camera = document.getElementById('main-camera');
     if (camera) {
-      // reverseMouseDrag: false — интуитивное поведение: тянешь мышь вправо → поворачиваешься вправо
-      camera.setAttribute('look-controls', 'magicWindowTrackingEnabled: false; touchEnabled: false; reverseMouseDrag: false');
+      camera.setAttribute('look-controls', {
+        enabled: true,
+        reverseMouseDrag: false,
+        touchEnabled: false,
+        magicWindowTrackingEnabled: false
+      });
     }
 
-    const vrBtn = document.getElementById('custom-vr-btn');
-    if (vrBtn) vrBtn.style.display = 'none';
+    const closeBtn = document.getElementById('exhibit-close-btn');
+    if (closeBtn) closeBtn.addEventListener('click', closeHTMLModal);
+    const overlay = document.getElementById('exhibit-overlay');
+    if (overlay) overlay.addEventListener('click', e => { if (e.target === overlay) closeHTMLModal(); });
 
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closeModal3D();
-      // Горячая клавиша для отладочной панели: ` или ё
-      if (e.key === '`' || e.key === 'ё') {
-        const btn = document.getElementById('debug-toggle-btn');
-        if (btn) btn.click();
-      }
-    });
+    setupDebug();
 
-    setupDebugSystem();
+    const badge = document.getElementById('device-mode-badge');
+    if (badge) badge.textContent = '🖥 ПК (мышь)';
 
     let startRoom = window.location.hash.replace('#', '');
     if (!startRoom || !CONFIG.rooms || !CONFIG.rooms[startRoom]) {
       startRoom = (CONFIG && CONFIG.startRoom) || 'room1';
     }
 
-    // Первичная загрузка без рывков
-    const initialRoom = CONFIG.rooms[startRoom];
-    if (initialRoom) {
+    const startDef = CONFIG.rooms[startRoom];
+    if (startDef) {
       const sky = document.getElementById('sky-pano');
-      if (sky) sky.setAttribute('src', initialRoom.panorama);
+      if (sky) sky.setAttribute('src', startDef.panorama);
       renderRoomContent(startRoom);
     }
+
+    setTimeout(hideLoadingScreen, 6000);
   }
 
   window.initMuseumTour = initPC;
 
-  const sceneEl = document.querySelector('a-scene');
-  if (sceneEl && sceneEl.hasLoaded) {
-    initPC();
-  } else if (sceneEl) {
-    sceneEl.addEventListener('loaded', initPC);
-  }
+  const scene = document.querySelector('a-scene');
+  if (scene && scene.hasLoaded) initPC();
+  else if (scene) scene.addEventListener('loaded', initPC);
 })();

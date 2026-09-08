@@ -3,97 +3,114 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#0B0D14">
+  <meta name="theme-color" content="#080B14">
   <title>Виртуальный Музей 360</title>
   <meta name="description" content="Интерактивный виртуальный 3D-музей с панорамами 360°, информационными карточками экспонатов и поддержкой VR Cardboard">
   <meta property="og:title" content="Виртуальный Музей 360">
   <meta property="og:description" content="Интерактивный виртуальный 3D-музей с панорамами 360°, информационными карточками экспонатов и поддержкой VR Cardboard">
-  
-  <!-- A-Frame 1.5.0 и Look-At компонент -->
+
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
-  
-  <!-- Таблица стилей -->
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
   <noscript>
-    <div style="position:fixed;inset:0;background:#0B0D14;color:#fff;display:flex;align-items:center;justify-content:center;font-family:sans-serif;font-size:18px;text-align:center;padding:20px;z-index:9999;">
+    <div style="position:fixed;inset:0;background:#080B14;color:#fff;display:flex;align-items:center;justify-content:center;font-family:sans-serif;font-size:18px;text-align:center;padding:20px;z-index:9999;">
       <p>Для работы Виртуального Музея 360° необходим JavaScript.<br>Пожалуйста, включите его в настройках браузера.</p>
     </div>
   </noscript>
 
-  <!-- Верхняя плашка UI -->
+  <!-- ── Загрузочный экран ── -->
+  <div id="loading-screen">
+    <div class="loader-wrap">
+      <div class="loader-ring"></div>
+      <div class="loader-logo">🏛</div>
+    </div>
+    <p class="loader-text">Загрузка музея<span class="loader-dots"></span></p>
+  </div>
+
+  <!-- ── Верхний UI ── -->
   <div id="ui-header">
-    <h1 id="room-title">Загрузка музея...</h1>
-    <div class="sub-row">
-      <p>Виртуальный Музей 360°</p>
+    <div class="ui-eyebrow">🏛 Виртуальный Музей</div>
+    <h1 id="room-title">Главный зал</h1>
+    <div class="ui-sub-row">
       <span id="device-mode-badge">Определение...</span>
     </div>
   </div>
 
-  <!-- Кнопка VR (Cardboard) для мобильных устройств -->
-  <button id="custom-vr-btn">👓 РЕЖИМ VR (Cardboard)</button>
+  <!-- ── Кнопка VR (мобильные) ── -->
+  <button id="custom-vr-btn">
+    <span>👓</span>
+    <span>Режим VR</span>
+  </button>
 
-  <!-- Подсказка управления для ПК -->
-  <div id="pc-hint">Зажмите левую кнопку мыши для вращения • Клик по маркеру для взаимодействия</div>
+  <!-- ── Подсказки ── -->
+  <div id="pc-hint">
+    <span>🖱 Тяните для вращения</span>
+    <span class="hint-sep">·</span>
+    <span>Нажмите на маркер</span>
+  </div>
+  <div id="mobile-hint">
+    <span>👆 Свайп для вращения</span>
+    <span class="hint-sep">·</span>
+    <span>Нажмите на маркер</span>
+  </div>
 
-  <!-- 3D Сцена A-Frame -->
-  <a-scene 
+  <!-- ── A-Frame сцена ── -->
+  <a-scene
     id="museum-scene"
-    embedded 
+    embedded
     loading-screen="enabled: false"
     vr-mode-ui="enabled: false"
-    renderer="colorManagement: true; antialias: true; physicallyCorrectLights: true;"
+    renderer="colorManagement: true; antialias: true;"
   >
-    <!-- Базовое мягкое освещение -->
-    <a-light type="ambient" color="#FFFFFF" intensity="1.5"></a-light>
-    
-    <!-- 360 Панорамы с плавным пространственным смешиванием в стиле Google Maps (без черных переходов) -->
-    <a-sky id="sky-pano" src="" rotation="0 -90 0" material="shader: flat; transparent: true; opacity: 1; color: #FFFFFF"></a-sky>
+    <a-light type="ambient" color="#FFFFFF" intensity="1.8"></a-light>
+
+    <!-- 360° панорамы -->
+    <a-sky id="sky-pano"          src="" rotation="0 -90 0" material="shader: flat; transparent: true; opacity: 1; color: #FFFFFF"></a-sky>
     <a-sky id="sky-pano-incoming" src="" rotation="0 -90 0" visible="false" material="shader: flat; transparent: true; opacity: 0; color: #FFFFFF"></a-sky>
 
-    <!-- 3D Контейнеры для меток -->
+    <!-- Контейнеры объектов -->
     <a-entity id="links-container"></a-entity>
     <a-entity id="exhibits-container"></a-entity>
     <a-entity id="modal-container"></a-entity>
 
-    <!-- Мышиный / сенсорный курсор для 2D режима -->
+    <!-- Курсор мыши (ПК и мобильный не-VR) -->
     <a-entity id="mouse-cursor" cursor="rayOrigin: mouse" raycaster="objects: .clickable; far: 50"></a-entity>
 
-    <!-- Камера с анимируемой группой rig для эффекта шага вперед Google Street View -->
+    <!-- Камера -->
     <a-entity id="camera-rig" position="0 0 0">
-      <a-camera 
-        id="main-camera" 
+      <a-camera
+        id="main-camera"
         position="0 0 0"
-        look-controls="enabled: false" 
+        look-controls="enabled: false"
         wasd-controls="enabled: false"
       >
-        <!-- VR прицел взгляда (активен только в Cardboard VR) -->
-        <a-entity 
-          id="vr-cursor" 
-          visible="false" 
-          cursor="fuse: false" 
-          raycaster="objects: .clickable; enabled: false; far: 50" 
-          position="0 0 -1"
-          geometry="primitive: ring; radiusInner: 0.012; radiusOuter: 0.022"
-          material="color: #FFFFFF; shader: flat; transparent: true; opacity: 0.85"
+        <!-- VR прицел (только Cardboard) — комфортная точка на глубине объектов (-2.8м), устраняющая двоение -->
+        <a-entity
+          id="vr-cursor"
+          visible="false"
+          cursor="fuse: false"
+          raycaster="objects: .clickable; enabled: false; far: 50; interval: 20"
+          position="0 0 -2.8"
         >
-          <!-- Круговой индикатор 3-секундного таймера взгляда -->
-          <a-entity 
-            id="vr-cursor-progress" 
-            visible="false"
-            geometry="primitive: ring; radiusInner: 0.025; radiusOuter: 0.038"
-            material="color: #4ADE80; shader: flat; transparent: true; opacity: 0.95"
-          ></a-entity>
+          <a-circle
+            radius="0.020"
+            material="color: #FFFFFF; shader: flat; transparent: true; opacity: 0.95; depthTest: false"
+          ></a-circle>
+          <a-ring
+            radius-inner="0.036"
+            radius-outer="0.052"
+            material="color: #38BDF8; shader: flat; transparent: true; opacity: 0.8; depthTest: false"
+          ></a-ring>
         </a-entity>
       </a-camera>
     </a-entity>
   </a-scene>
 
-  <!-- Нативное диалоговое окно перед запуском VR Cardboard -->
-  <div id="vr-modal" style="display: none;">
+  <!-- ── VR Cardboard диалог ── -->
+  <div id="vr-modal" style="display:none;">
     <div class="vr-modal-card">
       <div class="vr-modal-icon">👓</div>
       <h2>Режим VR Cardboard</h2>
@@ -104,43 +121,54 @@
         </div>
         <div class="vr-step">
           <span class="vr-step-num">2</span>
-          <span>Поворачивайте голову для свободного осмотра залов на 360°</span>
+          <span>Разрешите доступ к <b>датчикам положения (гироскопу)</b> для свободного обзора</span>
         </div>
         <div class="vr-step">
           <span class="vr-step-num">3</span>
-          <span><b>Управление взглядом:</b> наведите прицел на маркер и удерживайте <b>3 секунды</b></span>
+          <span><b>Управление взглядом:</b> наведите прицел на маркер и удерживайте <b>2 сек</b></span>
         </div>
       </div>
+      <div id="vr-permission-status" style="display:none; margin-bottom:14px; font-size:13px; color:#F59E0B; background:rgba(245,158,11,0.1); padding:8px 12px; border-radius:10px; border:1px solid rgba(245,158,11,0.25); text-align:left;"></div>
       <div class="vr-modal-buttons">
-        <button id="vr-start-btn" class="vr-btn-primary">Запустить VR</button>
+        <button id="vr-start-btn"  class="vr-btn-primary">Разрешить датчики и войти в VR</button>
         <button id="vr-cancel-btn" class="vr-btn-secondary">Отмена</button>
       </div>
     </div>
   </div>
 
-  <!-- Скрытая панель разработчика (Debug) -->
-  <button id="debug-toggle-btn" title="Служебная панель разработчика">⚙️ DEBUG</button>
-  
-  <div id="debug-panel" style="display: none;">
+  <!-- ── HTML Карточка экспоната (non-VR) ── -->
+  <div id="exhibit-overlay" role="dialog" aria-modal="true" aria-labelledby="exhibit-modal-title">
+    <div class="exhibit-card" id="exhibit-card">
+      <button class="exhibit-close-btn" id="exhibit-close-btn" aria-label="Закрыть">✕</button>
+      <div class="exhibit-img-wrap" id="exhibit-img-wrap">
+        <img id="exhibit-img" src="" alt="Фото экспоната">
+      </div>
+      <div class="exhibit-info">
+        <div class="exhibit-badge">🏛 ЭКСПОНАТ МУЗЕЯ</div>
+        <h2 class="exhibit-title" id="exhibit-modal-title"></h2>
+        <div class="exhibit-divider"></div>
+        <p class="exhibit-desc" id="exhibit-desc"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Debug панель ── -->
+  <button id="debug-toggle-btn" title="Служебная панель">⚙️ DEBUG</button>
+
+  <div id="debug-panel" style="display:none;">
     <div class="debug-header">
       <h3>🛠️ Debug Консоль</h3>
       <button class="debug-close-btn" id="debug-close-btn" title="Закрыть">✕</button>
     </div>
-
-    <!-- Быстрый переход по залам -->
     <div class="debug-section">
       <div class="debug-section-title">Быстрый переход в зал:</div>
       <select id="debug-room-select" class="debug-room-select"></select>
     </div>
-
-    <!-- Координаты центра взгляда -->
     <div class="debug-section">
       <div class="debug-section-title">Координаты взгляда (x y z):</div>
       <div id="debug-coord-val" class="debug-coord-display">0.00 0.00 -3.00</div>
       <button id="debug-copy-coords-btn" class="debug-copy-btn">📋 Скопировать для config.js</button>
     </div>
-
-    <!-- Метрики и системная информация -->
     <div class="debug-section">
       <div class="debug-section-title">Метрики и устройство:</div>
       <div class="debug-metrics-grid">
@@ -150,7 +178,7 @@
         </div>
         <div class="debug-metric-box">
           <div class="debug-metric-label">Текущая комната:</div>
-          <div id="debug-current-room" class="debug-metric-val">room1</div>
+          <div id="debug-current-room" class="debug-metric-val">—</div>
         </div>
         <div class="debug-metric-box">
           <div class="debug-metric-label">Углы камеры (Y / P):</div>
@@ -162,15 +190,12 @@
         </div>
       </div>
     </div>
-
-    <!-- Служебные быстрые действия -->
     <div class="debug-actions">
       <button id="debug-reset-cam-btn" class="debug-action-btn">↺ Сброс камеры</button>
-      <button id="debug-test-vr-btn" class="debug-action-btn">🕶️ Тест Cardboard</button>
+      <button id="debug-test-vr-btn"   class="debug-action-btn">🕶️ Тест VR</button>
     </div>
   </div>
 
-  <!-- Конфигурация и запуск -->
   <script src="config.js"></script>
   <script src="main.js"></script>
 </body>

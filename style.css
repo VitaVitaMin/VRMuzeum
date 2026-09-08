@@ -1,158 +1,390 @@
 /* ==========================================================================
-   Виртуальный Музей 360° — Стилизация
+   Виртуальный Музей 360° — Полный дизайн
    ========================================================================== */
 
-*, *::before, *::after {
-  box-sizing: border-box;
-}
+*, *::before, *::after { box-sizing: border-box; }
 
 body, html {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
+  margin: 0; padding: 0;
+  width: 100%; height: 100%;
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  background-color: #0B0D14;
-  color: #FFFFFF;
+  background: #080B14;
+  color: #F8FAFC;
   touch-action: none;
   overscroll-behavior: none;
   -webkit-user-select: none;
   user-select: none;
 }
 
-/* 3D Сцена A-Frame */
+/* ==========================================================================
+   A-Frame сцена
+   ========================================================================== */
+
 a-scene {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   z-index: 1;
-  transition: filter 0.45s ease-out;
+  transition: filter 0.5s ease-out;
 }
 
-/* Эффект Google Street View Warp Motion на сцене */
 a-scene.street-warp-active {
-  filter: blur(1.5px) contrast(1.08);
+  filter: blur(2px) contrast(1.06) brightness(0.92);
 }
 
-/* Верхняя панель UI */
+/* ==========================================================================
+   Загрузочный экран
+   ========================================================================== */
+
+#loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #080B14;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  transition: opacity 0.55s ease, visibility 0.55s ease;
+}
+
+#loading-screen.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.loader-wrap {
+  position: relative;
+  width: 72px;
+  height: 72px;
+}
+
+.loader-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.06);
+  border-top-color: #F59E0B;
+  animation: spin 0.85s linear infinite;
+}
+
+.loader-logo {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  animation: pulse-slow 2s ease-in-out infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse-slow { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
+
+.loader-text {
+  color: #475569;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+
+.loader-dots::after {
+  content: '';
+  animation: dots 1.6s steps(4, end) infinite;
+}
+@keyframes dots {
+  0%   { content: ''; }
+  25%  { content: '.'; }
+  50%  { content: '..'; }
+  75%  { content: '...'; }
+  100% { content: ''; }
+}
+
+/* ==========================================================================
+   Верхний UI Header
+   ========================================================================== */
+
 #ui-header {
   position: absolute;
   top: 16px;
   left: 16px;
   z-index: 20;
-  background: rgba(18, 22, 36, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  padding: 12px 20px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  background: rgba(8, 11, 20, 0.82);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  padding: 14px 20px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
   pointer-events: none;
   max-width: calc(100vw - 32px);
-  transition: opacity 0.3s ease;
 }
 
-#ui-header h1 {
+.ui-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  color: #F59E0B;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 5px;
+  opacity: 0.85;
+}
+
+#room-title {
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: #FFFFFF;
-  letter-spacing: -0.02em;
+  color: #F8FAFC;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  transition: opacity 0.25s ease;
 }
 
-#ui-header .sub-row {
+#room-title.fading { opacity: 0; }
+
+.ui-sub-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 4px;
-}
-
-#ui-header p {
-  margin: 0;
-  font-size: 13px;
-  color: #94A3B8;
+  margin-top: 7px;
 }
 
 #device-mode-badge {
   font-size: 11px;
-  background: rgba(255, 255, 255, 0.1);
-  padding: 2px 8px;
-  border-radius: 20px;
+  font-weight: 600;
   color: #38BDF8;
-  font-weight: 500;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  padding: 3px 10px;
+  border-radius: 20px;
 }
 
-/* Кнопка режима VR для смартфонов */
+/* ==========================================================================
+   Подсказки управления
+   ========================================================================== */
+
+#pc-hint, #mobile-hint {
+  display: none;
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  background: rgba(8, 11, 20, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 9px 20px;
+  border-radius: 30px;
+  font-size: 12px;
+  color: #64748B;
+  pointer-events: none;
+  white-space: nowrap;
+  gap: 8px;
+  align-items: center;
+}
+
+body.is-pc #pc-hint     { display: flex; }
+body.is-mobile #mobile-hint { display: flex; }
+
+.hint-sep { color: #334155; }
+
+/* ==========================================================================
+   Кнопка VR
+   ========================================================================== */
+
 #custom-vr-btn {
   display: none;
   position: absolute;
-  bottom: 24px;
+  bottom: 22px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 50;
-  background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
   color: #FFFFFF;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  padding: 14px 28px;
-  font-size: 16px;
+  border: none;
+  padding: 13px 26px;
+  font-size: 15px;
   font-weight: 700;
   border-radius: 50px;
   cursor: pointer;
-  box-shadow: 0 8px 24px rgba(245, 124, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
   letter-spacing: 0.02em;
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, opacity 0.2s ease;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
   pointer-events: auto;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   white-space: nowrap;
 }
 
 #custom-vr-btn:active {
-  transform: translateX(-50%) scale(0.96);
-  box-shadow: 0 4px 12px rgba(245, 124, 0, 0.3);
+  transform: translateX(-50%) scale(0.95);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25);
 }
 
-/* Подсказка управления для ПК */
-#pc-hint {
-  display: none;
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 20;
-  background: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 8px 18px;
-  border-radius: 20px;
-  font-size: 13px;
-  color: #94A3B8;
-  pointer-events: none;
-  white-space: nowrap;
-}
-
-body.is-pc #pc-hint {
-  display: block;
+#custom-vr-btn:hover {
+  transform: translateX(-50%) scale(1.04);
+  box-shadow: 0 12px 30px rgba(245, 158, 11, 0.5);
 }
 
 /* ==========================================================================
-   Модальное окно запуска VR Cardboard для мобильных
+   HTML Карточка экспоната (non-VR)
+   ========================================================================== */
+
+#exhibit-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: none;   /* flex устанавливается JS-ом */
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0);
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
+  transition:
+    background 0.3s ease,
+    backdrop-filter 0.3s ease;
+  pointer-events: none;
+}
+
+#exhibit-overlay.open {
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  pointer-events: all;
+}
+
+.exhibit-card {
+  background: linear-gradient(158deg, #111827 0%, #0B1020 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 22px;
+  max-width: 460px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-shadow:
+    0 32px 72px rgba(0, 0, 0, 0.85),
+    0 0 0 1px rgba(245, 158, 11, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  position: relative;
+  transform: scale(0.86) translateY(28px);
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
+}
+
+#exhibit-overlay.open .exhibit-card {
+  transform: scale(1) translateY(0);
+}
+
+/* Полоска-акцент сверху */
+.exhibit-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #F59E0B, #FCD34D, #F59E0B);
+  border-radius: 22px 22px 0 0;
+}
+
+.exhibit-close-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 5;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(15, 20, 35, 0.75);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94A3B8;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.exhibit-close-btn:hover {
+  background: rgba(239, 68, 68, 0.85);
+  color: #fff;
+  border-color: rgba(239, 68, 68, 0.4);
+  transform: scale(1.12) rotate(90deg);
+}
+
+.exhibit-img-wrap {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 20px 20px 0 0;
+  flex-shrink: 0;
+}
+
+.exhibit-img-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.exhibit-card:hover .exhibit-img-wrap img {
+  transform: scale(1.03);
+}
+
+.exhibit-info {
+  padding: 22px 24px 28px;
+}
+
+.exhibit-badge {
+  font-size: 10px;
+  font-weight: 800;
+  color: #F59E0B;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  margin-bottom: 10px;
+}
+
+.exhibit-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #F8FAFC;
+  margin: 0 0 14px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.exhibit-divider {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.5) 0%, rgba(255, 255, 255, 0.04) 100%);
+  margin-bottom: 16px;
+}
+
+.exhibit-desc {
+  font-size: 14px;
+  color: #94A3B8;
+  line-height: 1.7;
+  margin: 0;
+}
+
+/* ==========================================================================
+   VR Cardboard диалог
    ========================================================================== */
 
 #vr-modal {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   z-index: 100;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -160,31 +392,28 @@ body.is-pc #pc-hint {
 }
 
 .vr-modal-card {
-  background: #161925;
-  border: 2px solid #FF9800;
+  background: linear-gradient(158deg, #111827, #0B1020);
+  border: 1.5px solid rgba(245, 158, 11, 0.35);
   border-radius: 24px;
-  padding: 24px;
-  max-width: 440px;
+  padding: 28px 24px;
+  max-width: 400px;
   width: 100%;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
   text-align: center;
-  animation: vrModalIn 0.25s ease-out;
+  animation: cardIn 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-@keyframes vrModalIn {
-  from { opacity: 0; transform: scale(0.92); }
-  to { opacity: 1; transform: scale(1); }
+@keyframes cardIn {
+  from { opacity: 0; transform: scale(0.9) translateY(12px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-.vr-modal-icon {
-  font-size: 48px;
-  margin-bottom: 8px;
-}
+.vr-modal-icon { font-size: 44px; margin-bottom: 10px; }
 
 .vr-modal-card h2 {
-  margin: 0 0 16px 0;
-  font-size: 22px;
-  color: #FF9800;
+  margin: 0 0 18px;
+  font-size: 20px;
+  color: #F59E0B;
   font-weight: 700;
 }
 
@@ -193,78 +422,63 @@ body.is-pc #pc-hint {
   flex-direction: column;
   gap: 12px;
   text-align: left;
-  margin-bottom: 24px;
+  margin-bottom: 22px;
 }
 
 .vr-step {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  font-size: 14px;
-  color: #E2E8F0;
-  line-height: 1.45;
+  font-size: 13px;
+  color: #CBD5E1;
+  line-height: 1.5;
 }
 
 .vr-step-num {
-  background: rgba(255, 152, 0, 0.2);
-  color: #FF9800;
-  border: 1px solid rgba(255, 152, 0, 0.4);
-  width: 24px;
-  height: 24px;
+  background: rgba(245, 158, 11, 0.15);
+  color: #F59E0B;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  width: 24px; height: 24px;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
-  flex-shrink: 0;
-  margin-top: 1px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+  flex-shrink: 0; margin-top: 1px;
 }
 
-.vr-step b {
-  color: #38BDF8;
-}
+.vr-step b { color: #38BDF8; }
 
-.vr-modal-buttons {
-  display: flex;
-  gap: 10px;
-}
+.vr-modal-buttons { display: flex; gap: 10px; }
 
 .vr-btn-primary {
   flex: 2;
-  background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
-  color: #FFFFFF;
+  background: linear-gradient(135deg, #F59E0B, #D97706);
+  color: #FFF;
   border: none;
-  padding: 14px 20px;
-  font-size: 16px;
-  font-weight: 700;
-  border-radius: 12px;
+  padding: 13px 18px;
+  font-size: 15px; font-weight: 700;
+  border-radius: 14px;
   cursor: pointer;
-  transition: transform 0.15s ease;
+  transition: transform 0.15s ease, filter 0.15s ease;
 }
-
-.vr-btn-primary:active {
-  transform: scale(0.97);
-}
+.vr-btn-primary:hover   { filter: brightness(1.1); }
+.vr-btn-primary:active  { transform: scale(0.97); }
 
 .vr-btn-secondary {
   flex: 1;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.07);
   color: #94A3B8;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  padding: 14px 20px;
-  font-size: 15px;
-  font-weight: 600;
-  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 13px 16px;
+  font-size: 14px; font-weight: 600;
+  border-radius: 14px;
   cursor: pointer;
+  transition: background 0.15s, color 0.15s;
 }
-
-.vr-btn-secondary:active {
-  background: rgba(255, 255, 255, 0.15);
-}
+.vr-btn-secondary:hover  { background: rgba(255,255,255,0.12); color: #CBD5E1; }
+.vr-btn-secondary:active { background: rgba(255,255,255,0.15); }
 
 /* ==========================================================================
-   Кнопка и Панель DEBUG (Служебная панель разработчика)
+   Debug панель
    ========================================================================== */
 
 #debug-toggle-btn {
@@ -272,278 +486,166 @@ body.is-pc #pc-hint {
   bottom: 18px;
   left: 18px;
   z-index: 30;
-  background: rgba(18, 22, 36, 0.75);
-  color: #94A3B8;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 24px;
-  padding: 8px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  background: rgba(8, 11, 20, 0.78);
+  color: #64748B;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 30px;
+  padding: 7px 14px;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.05em;
+  display: flex; align-items: center; gap: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
   pointer-events: auto;
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 #debug-toggle-btn:hover {
-  background: rgba(30, 41, 59, 0.95);
+  background: rgba(15, 23, 42, 0.95);
   color: #38BDF8;
-  border-color: rgba(56, 189, 248, 0.4);
+  border-color: rgba(56, 189, 248, 0.3);
   transform: translateY(-1px);
 }
 
-/* Модальная панель Debug */
 #debug-panel {
   position: absolute;
-  bottom: 64px;
-  left: 18px;
+  bottom: 60px; left: 18px;
   z-index: 40;
-  background: rgba(15, 23, 42, 0.95);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  padding: 18px;
+  background: rgba(8, 11, 20, 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  padding: 16px;
   border-radius: 16px;
-  border: 1px solid rgba(56, 189, 248, 0.25);
-  width: 320px;
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  width: 310px;
   max-height: calc(100vh - 100px);
   overflow-y: auto;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75);
   pointer-events: auto;
-  animation: debugFadeIn 0.2s ease-out;
+  animation: slideUp 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-@keyframes debugFadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .debug-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px; padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .debug-header h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: #38BDF8;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  margin: 0; font-size: 12px; font-weight: 800;
+  color: #38BDF8; text-transform: uppercase; letter-spacing: 0.08em;
 }
 
 .debug-close-btn {
-  background: none;
-  border: none;
-  color: #94A3B8;
-  font-size: 16px;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
+  background: none; border: none; color: #475569;
+  font-size: 15px; cursor: pointer; padding: 3px; border-radius: 4px;
+  transition: color 0.15s;
 }
+.debug-close-btn:hover { color: #EF4444; }
 
-.debug-close-btn:hover {
-  color: #EF4444;
-}
-
-.debug-section {
-  margin-bottom: 14px;
-}
+.debug-section { margin-bottom: 13px; }
 
 .debug-section-title {
-  font-size: 11px;
-  font-weight: 700;
-  color: #64748B;
-  text-transform: uppercase;
-  margin-bottom: 6px;
+  font-size: 10px; font-weight: 700; color: #475569;
+  text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px;
 }
 
-/* Координаты взгляда */
 .debug-coord-display {
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-  font-size: 14px;
-  font-weight: 700;
-  color: #4ADE80;
-  background: rgba(0, 0, 0, 0.6);
-  padding: 8px 10px;
-  border-radius: 8px;
-  text-align: center;
-  border: 1px solid rgba(74, 222, 128, 0.3);
-  margin-bottom: 6px;
-  letter-spacing: 0.05em;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 14px; font-weight: 700; color: #4ADE80;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 8px 10px; border-radius: 8px; text-align: center;
+  border: 1px solid rgba(74, 222, 128, 0.25);
+  margin-bottom: 6px; letter-spacing: 0.04em;
 }
 
 .debug-copy-btn {
   width: 100%;
-  background: rgba(56, 189, 248, 0.15);
-  border: 1px solid rgba(56, 189, 248, 0.3);
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.25);
   color: #38BDF8;
-  padding: 7px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  transition: all 0.2s;
+  padding: 7px 10px; border-radius: 7px;
+  font-size: 11px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  transition: all 0.18s;
 }
+.debug-copy-btn:hover  { background: rgba(56,189,248,0.18); border-color: #38BDF8; }
+.debug-copy-btn.copied { background: rgba(74,222,128,0.15); border-color: #4ADE80; color: #4ADE80; }
 
-.debug-copy-btn:hover {
-  background: rgba(56, 189, 248, 0.25);
-  border-color: #38BDF8;
-}
-
-.debug-copy-btn.copied {
-  background: rgba(74, 222, 128, 0.2);
-  border-color: #4ADE80;
-  color: #4ADE80;
-}
-
-/* Переключатель комнат */
 .debug-room-select {
   width: 100%;
-  background: #1E293B;
-  color: #FFFFFF;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 6px;
-  padding: 7px 10px;
-  font-size: 12px;
-  cursor: pointer;
-  outline: none;
+  background: #0F1729; color: #F1F5F9;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px; padding: 7px 10px;
+  font-size: 12px; cursor: pointer; outline: none;
 }
 
-/* Таблица метрик */
-.debug-metrics-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  font-size: 11px;
-}
+.debug-metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 
 .debug-metric-box {
   background: rgba(0, 0, 0, 0.3);
-  padding: 6px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 7px 9px; border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
-.debug-metric-label {
-  color: #64748B;
-  font-size: 10px;
-}
+.debug-metric-label { color: #475569; font-size: 10px; }
 
 .debug-metric-val {
-  color: #F8FAFC;
-  font-weight: 600;
-  margin-top: 2px;
-  font-family: monospace;
+  color: #F1F5F9; font-weight: 700; margin-top: 3px;
+  font-family: monospace; font-size: 11px;
 }
 
-/* Служебные кнопки действий */
-.debug-actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 10px;
-}
+.debug-actions { display: flex; gap: 6px; margin-top: 10px; }
 
 .debug-action-btn {
   flex: 1;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #E2E8F0;
-  padding: 6px;
-  border-radius: 6px;
-  font-size: 11px;
-  cursor: pointer;
-  text-align: center;
-  transition: background 0.2s;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: #CBD5E1; padding: 7px 6px; border-radius: 7px;
+  font-size: 11px; cursor: pointer; text-align: center;
+  transition: background 0.18s, color 0.18s;
 }
-
-.debug-action-btn:hover {
-  background: rgba(255, 255, 255, 0.16);
-}
-
-/* Адаптивность для смартфонов */
-@media (max-width: 640px) {
-  #ui-header {
-    top: 12px;
-    left: 12px;
-    padding: 10px 14px;
-  }
-  #ui-header h1 {
-    font-size: 17px;
-  }
-  #custom-vr-btn {
-    bottom: 20px;
-    padding: 12px 24px;
-    font-size: 15px;
-  }
-  #debug-toggle-btn {
-    bottom: 14px;
-    left: 14px;
-    padding: 6px 10px;
-    font-size: 11px;
-  }
-  #debug-panel {
-    bottom: 54px;
-    left: 14px;
-    width: 280px;
-  }
-}
+.debug-action-btn:hover { background: rgba(255,255,255,0.13); color: #F8FAFC; }
 
 /* ==========================================================================
-   Accessibility — видимый фокус для клавиатурной навигации
+   Accessibility — Focus visible
    ========================================================================== */
 
-/* Скрываем стандартный outline только если НЕ используется клавиатура */
-:focus:not(:focus-visible) {
-  outline: none;
-}
+:focus:not(:focus-visible) { outline: none; }
 
-/* Показываем явный фокус при навигации с клавиатуры */
 :focus-visible {
   outline: 2px solid #38BDF8;
   outline-offset: 3px;
   border-radius: 4px;
 }
 
-/* Кнопки с собственным border-radius получают скруглённый outline */
 #custom-vr-btn:focus-visible,
-#debug-toggle-btn:focus-visible,
-.vr-btn-primary:focus-visible,
-.vr-btn-secondary:focus-visible {
-  outline-offset: 4px;
-  border-radius: 50px;
-}
+.vr-btn-primary:focus-visible { border-radius: 50px; }
 
 .debug-copy-btn:focus-visible,
 .debug-action-btn:focus-visible,
-.debug-close-btn:focus-visible,
-#debug-reset-cam-btn:focus-visible,
-#debug-test-vr-btn:focus-visible {
-  outline-offset: 2px;
-  border-radius: 6px;
-}
+.debug-close-btn:focus-visible { border-radius: 7px; }
 
-/* Hover для кнопок VR-модалки */
-.vr-btn-primary:hover {
-  filter: brightness(1.1);
-}
+/* ==========================================================================
+   Адаптивность
+   ========================================================================== */
 
-.vr-btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: #CBD5E1;
-}
+@media (max-width: 640px) {
+  #ui-header { top: 10px; left: 10px; padding: 11px 15px 13px; }
+  #room-title { font-size: 17px; }
+  .ui-eyebrow { font-size: 9px; }
 
+  #custom-vr-btn { bottom: 18px; padding: 11px 22px; font-size: 14px; }
+
+  #debug-toggle-btn { bottom: 12px; left: 12px; padding: 6px 11px; font-size: 10px; }
+  #debug-panel { bottom: 52px; left: 12px; width: 272px; }
+
+  .exhibit-title { font-size: 19px; }
+  .exhibit-info  { padding: 18px 18px 24px; }
+}
