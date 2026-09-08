@@ -1,8 +1,53 @@
-// main.js - Определяет устройство и загружает нужный скрипт
-const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+// main.js — Главный маршрутизатор устройств (ПК / Мобильный)
+(function () {
+  'use strict';
 
-console.log(isMobile ? "Мобильное устройство определено. Загрузка мобильной версии..." : "ПК определен. Загрузка версии для ПК...");
+  // Надежное определение мобильного устройства
+  function detectMobile() {
+    const ua = navigator.userAgent || navigator.vendor || window.opera;
+    const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+    const isTouchScreen = ('ontouchstart' in window || navigator.maxTouchPoints > 0) && window.innerWidth <= 1024;
+    return Boolean(isMobileUA || isTouchScreen);
+  }
 
-const script = document.createElement('script');
-script.src = isMobile ? 'app-mobile.js' : 'app-pc.js';
-document.body.appendChild(script);
+  const isMobile = detectMobile();
+  window.IS_MOBILE = isMobile;
+
+  // Обновляем классы и UI в соответствии с платформой
+  document.body.classList.remove('is-mobile', 'is-pc');
+  document.body.classList.add(isMobile ? 'is-mobile' : 'is-pc');
+
+  const modeBadge = document.getElementById('device-mode-badge');
+  if (modeBadge) {
+    modeBadge.textContent = isMobile ? '📱 Мобильный (Сенсорный свайп)' : '💻 ПК (Управление мышью)';
+  }
+
+  const vrBtn = document.getElementById('custom-vr-btn');
+  if (vrBtn) {
+    // Кнопка VR нужна исключительно на мобильных устройствах под очки Cardboard
+    vrBtn.style.display = isMobile ? 'inline-flex' : 'none';
+  }
+
+  const scriptToLoad = isMobile ? 'app-mobile.js' : 'app-pc.js';
+  console.log(`[Музей] Определено устройство: ${isMobile ? 'Мобильный' : 'ПК'}. Загрузка ${scriptToLoad}...`);
+
+  // Загружаем нужный модуль скрипта
+  const script = document.createElement('script');
+  script.src = scriptToLoad;
+  script.async = false;
+
+  script.onload = function () {
+    console.log(`[Музей] Модуль ${scriptToLoad} успешно загружен.`);
+    if (typeof window.initMuseumTour === 'function') {
+      window.initMuseumTour();
+    }
+  };
+
+  script.onerror = function (err) {
+    console.error(`[Музей] Ошибка при загрузке ${scriptToLoad}:`, err);
+    const roomTitle = document.getElementById('room-title');
+    if (roomTitle) roomTitle.innerText = 'Ошибка загрузки модуля музея';
+  };
+
+  document.head.appendChild(script);
+})();
