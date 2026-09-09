@@ -33,7 +33,7 @@ const CONFIG = {
     
     "room2": {
       name: "Коридор",
-      panorama: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/European_Southern_Observatory_Logo.svg/1024px-European_Southern_Observatory_Logo.svg.png",
+      panorama: "assets/1234.jpg",
       exhibits: [],
       links: [
         {
